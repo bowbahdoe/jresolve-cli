@@ -1,0 +1,27 @@
+[
+  {
+    "name" : "dev.mccue.resolve.cli.CliMain",
+    "allDeclaredConstructors" : true,
+    "allPublicConstructors" : true,
+    "allDeclaredMethods" : true,
+    "allPublicMethods" : true,
+    "fields" : [
+      { "name" : "dependencies" },
+      { "name" : "dependencyFile" },
+      { "name" : "mavenRepositoriesFile" },
+      { "name" : "outputFile" },
+      { "name" : "printTree" }
+    ]
+  },
+  {
+    "name" : "picocli.CommandLine$AutoHelpMixin",
+    "allDeclaredConstructors" : true,
+    "allPublicConstructors" : true,
+    "allDeclaredMethods" : true,
+    "allPublicMethods" : true,
+    "fields" : [
+      { "name" : "helpRequested" },
+      { "name" : "versionRequested" }
+    ]
+  }
+]
