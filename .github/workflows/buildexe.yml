@@ -1,0 +1,34 @@
+name: GraalVM build
+on: [push, pull_request]
+jobs:
+  build:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ macos-latest, ubuntu-latest ]
+    steps:
+      - uses: actions/checkout@v2
+      - uses: extractions/setup-just@v1
+      - uses: graalvm/setup-graalvm@v1
+        with:
+          version: 'latest'
+          java-version: '21'
+          components: 'native-image'
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build on Mac and Linux
+        run: |
+          just exe
+        if: runner.os != 'Windows'
+
+      - name: Build on Windows
+        run: |
+          just exe
+        if: runner.os == 'Windows'
+
+
+      - name: Upload binary
+        uses: actions/upload-artifact@v2
+        with:
+          name: jproject-${{ matrix.os }}
+          path: jproject
