@@ -19,11 +19,12 @@ jobs:
       - name: Build on Mac and Linux
         run: |
           just exe
+          chmod +x jresolve
         if: runner.os != 'Windows'
 
       - name: Build on Windows
         run: |
-          just exe
+          just exe native-image.exe
         if: runner.os == 'Windows'
 
       - name: Upload binary
