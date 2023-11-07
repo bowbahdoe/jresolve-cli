@@ -14,6 +14,34 @@
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
     </properties>
 
+    <name>jresolve-cli</name>
+    <description>CLI for resolving dependencies on the JVM</description>
+    <url>https://github.com/bowbahdoe/jresolve-cli</url>
+
+    <developers>
+        <developer>
+            <name>Ethan McCue</name>
+            <email>ethan@mccue.dev</email>
+            <organization>McCue Software Solutions</organization>
+            <organizationUrl>https://www.mccue.dev</organizationUrl>
+        </developer>
+    </developers>
+
+    <licenses>
+        <license>
+            <name>Apache License, Version 2.0</name>
+            <url>http://www.apache.org/licenses/LICENSE-2.0.txt</url>
+            <distribution>repo</distribution>
+        </license>
+    </licenses>
+
+    <scm>
+        <connection>scm:git:git://github.com/bowbahdoe/jresolve-cli.git</connection>
+        <developerConnection>scm:git:ssh://github.com:bowbahdoe/jresolve-cli.git</developerConnection>
+        <url>http://github.com/bowbahdoe/jresolve-cli/tree/main</url>
+    </scm>
+
+
     <dependencies>
         <dependency>
             <groupId>info.picocli</groupId>
