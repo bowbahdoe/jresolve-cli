@@ -27,4 +27,4 @@ exe_windows:
     ./mvnw compile
     ./mvnw dependency:copy-dependencies
     ./mvnw package
-    native-image.cmd --module-path target\\dependency\\json-0.2.4.jar:target\\dependency\\picocli-4.7.5.jar:target\\dependency\\purl-0.0.1.jar:target\\dependency\\resolve-0.0.3.jar -H:+UnlockExperimentalVMOptions -H:ReflectionConfigurationFiles=reflect.json -H:+ReportUnsupportedElementsAtRuntime -jar target\\jresolve-cli-0.0.2.jar jresolve
+    native-image.cmd --module-path "target\dependency\json-0.2.4.jar:target\dependency\picocli-4.7.5.jar:target\dependency\purl-0.0.1.jar:target\dependency\resolve-0.0.3.jar" -H:+UnlockExperimentalVMOptions -H:ReflectionConfigurationFiles=reflect.json -H:+ReportUnsupportedElementsAtRuntime -jar target\\jresolve-cli-0.0.2.jar jresolve
