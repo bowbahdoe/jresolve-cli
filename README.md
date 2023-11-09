@@ -128,38 +128,43 @@ are some exceptions. A notable one is `jshell`, for some reason.
 ### Including absolute file paths
 
 If you need to include a path to a specific file or folder in your final `--class-path` or `--module-path`
-you can supply it directly as an argument with a `file:///` url.
+you can do that in one of two ways.
 
-Take note that you need three slashes after the `file:`, not two.
-
-```
-jresolve pkg:maven/org.apache.commons/commons-collections4@4.4 file:///some/other/path
-```
+The first is to include it as-is. Anything that cannot be parsed as a URL will be forwarded directly
+to the final path.
 
 ```
-/Users/emccue/.jresolve/cache/https/repo1.maven.org/maven2/org/apache/commons/commons-collections4/4.4/commons-collections4-4.4.jar:/some/other/path
-```
-
-### Including relative file paths
-
-When you use `file:///`, you are specifying an absolute path. In order to give a path
-relative to the directory you are running the command, use `{{user.dir}}` as a placeholder
-for the current directory.
-
-```
-jresolve pkg:maven/org.apache.commons/commons-collections4@4.4 file:///{{user.dir}}/some/other/path
+jresolve pkg:maven/org.apache.commons/commons-collections4@4.4 some/other/path
 ```
 
 ```
-/Users/emccue/.jresolve/cache/https/repo1.maven.org/maven2/org/apache/commons/commons-collections4/4.4/commons-collections4-4.4.jar:/Users/emccue/Development/jresolve-final-final/some/other/path```
+/Users/emccue/.jresolve/cache/https/repo1.maven.org/maven2/org/apache/commons/commons-collections4/4.4/commons-collections4-4.4.jar:some/other/path
+```
+
+
+The second is to supply it as an argument with a `file:///` url. Keep in mind that such urls
+are always absolute paths and as such likely won't be portable to other machines.
+
+```
+jresolve pkg:maven/org.apache.commons/commons-collections4@4.4 file:///an/absolute/path
+```
+
+```
+/Users/emccue/.jresolve/cache/https/repo1.maven.org/maven2/org/apache/commons/commons-collections4/4.4/commons-collections4-4.4.jar:/an/absolute/path
+```
+
 
 ### Including remote files
 
 If you need to include files hosted on some remote source, there is limited support for that.
-If you provide an `https://` url, that file will be downloaded.
+If you provide an `https://` url, that file will be downloaded and put onto the final path.
 
 There is no support for, and no plans to support, files hosted via other protocols like `tcp` or `http`
 or to support getting files behind urls which require authentication.
+
+```
+jresolve https://piston-data.mojang.com/v1/objects/5b868151bd02b41319f54c8d4061b8cae84e665c/server.jar
+```
 
 ### Usage to make a project
 

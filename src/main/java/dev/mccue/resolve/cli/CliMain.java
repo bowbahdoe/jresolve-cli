@@ -87,7 +87,6 @@ public final class CliMain implements Callable<Integer> {
             osArch = "x86_64";
         }
 
-        System.out.println(System.getProperty("user.dir"));
         var extraPaths = new ArrayList<Path>();
         var httpsUrls = new ArrayList<URI>();
         var packageUrls = new ArrayList<PackageUrl>();
@@ -136,7 +135,7 @@ public final class CliMain implements Callable<Integer> {
                     return subbedLine.split(":")[0] + " is not a supported protocol.";
                 }
                 else {
-                    return "File paths must be prefixed with file:///\nFor relative paths, use file:///{{user.dir}}/ as a prefix.";
+                    extraPaths.add(Path.of(subbedLine));
                 }
             }
 
@@ -254,32 +253,31 @@ public final class CliMain implements Callable<Integer> {
 
         var cache = Cache.standard();
         if (!httpsUrls.isEmpty()) {
-            try (var httpClient = HttpClient.newHttpClient()) {
-                for (var httpsUrl : httpsUrls) {
-                    var cacheKey = uriToCacheKey(httpsUrl);
-                    try {
-                        extraPaths.add(cache.fetch(cacheKey, () -> {
-                                    try {
-                                        var response = httpClient.send(
-                                                HttpRequest.newBuilder(httpsUrl)
-                                                        .build(),
-                                                HttpResponse.BodyHandlers.ofInputStream());
-                                        if (response.statusCode() < 200 || response.statusCode() >= 300) {
-                                            throw new IOException("Bad status code: " + response.statusCode());
-                                        }
-                                        return response.body();
-                                    } catch (IOException e) {
-                                        throw new UncheckedIOException(e);
-                                    } catch (InterruptedException e) {
-                                        throw new RuntimeException(e);
+            var httpClient = HttpClient.newHttpClient();
+            for (var httpsUrl : httpsUrls) {
+                var cacheKey = uriToCacheKey(httpsUrl);
+                try {
+                    extraPaths.add(cache.fetch(cacheKey, () -> {
+                                try {
+                                    var response = httpClient.send(
+                                            HttpRequest.newBuilder(httpsUrl)
+                                                    .build(),
+                                            HttpResponse.BodyHandlers.ofInputStream());
+                                    if (response.statusCode() < 200 || response.statusCode() >= 300) {
+                                        throw new IOException("Bad status code: " + response.statusCode());
                                     }
-                                })
-                        );
-                    } catch (UncheckedIOException e) {
-                        err.println(e.getMessage());
-                        err.flush();
-                        return -1;
-                    }
+                                    return response.body();
+                                } catch (IOException e) {
+                                    throw new UncheckedIOException(e);
+                                } catch (InterruptedException e) {
+                                    throw new RuntimeException(e);
+                                }
+                            })
+                    );
+                } catch (UncheckedIOException e) {
+                    err.println(e.getMessage());
+                    err.flush();
+                    return -1;
                 }
             }
         }
