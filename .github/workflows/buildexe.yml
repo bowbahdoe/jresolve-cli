@@ -23,7 +23,7 @@ jobs:
 
       - name: Build on Windows
         run: |
-          just exe native-image.cmd
+          just exe_windows
         if: runner.os == 'Windows'
 
       - name: Upload binary
