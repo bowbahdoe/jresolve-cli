@@ -125,20 +125,41 @@ java --class-path @build/argfiles/runtime src/Main.java
 Most tools in the JVM support expanding arguments from argfiles with `@`, but there
 are some exceptions. A notable one is `jshell`, for some reason.
 
-### Including file paths
+### Including absolute file paths
 
 If you need to include a path to a specific file or folder in your final `--class-path` or `--module-path`
-you can supply it directly as an argument.
+you can supply it directly as an argument with a `file:///` url.
 
-Anything that cannot be parsed as a package url is forwarded as is.
-
-```
-jresolve pkg:maven/org.apache.commons/commons-collections4@4.4 some/other/path
-```
+Take note that you need three slashes after the `file:`, not two.
 
 ```
-/Users/emccue/.jresolve/cache/https/repo1.maven.org/maven2/org/apache/commons/commons-collections4/4.4/commons-collections4-4.4.jar:some/other/path
+jresolve pkg:maven/org.apache.commons/commons-collections4@4.4 file:///some/other/path
 ```
+
+```
+/Users/emccue/.jresolve/cache/https/repo1.maven.org/maven2/org/apache/commons/commons-collections4/4.4/commons-collections4-4.4.jar:/some/other/path
+```
+
+### Including relative file paths
+
+When you use `file:///`, you are specifying an absolute path. In order to give a path
+relative to the directory you are running the command, use `{{user.dir}}` as a placeholder
+for the current directory.
+
+```
+jresolve pkg:maven/org.apache.commons/commons-collections4@4.4 file:///{{user.dir}}/some/other/path
+```
+
+```
+/Users/emccue/.jresolve/cache/https/repo1.maven.org/maven2/org/apache/commons/commons-collections4/4.4/commons-collections4-4.4.jar:/Users/emccue/Development/jresolve-final-final/some/other/path```
+
+### Including remote files
+
+If you need to include files hosted on some remote source, there is limited support for that.
+If you provide an `https://` url, that file will be downloaded.
+
+There is no support for, and no plans to support, files hosted via other protocols like `tcp` or `http`
+or to support getting files behind urls which require authentication.
 
 ### Usage to make a project
 

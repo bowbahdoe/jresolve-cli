@@ -6,7 +6,7 @@
 
     <groupId>dev.mccue</groupId>
     <artifactId>jresolve-cli</artifactId>
-    <version>0.0.1</version>
+    <version>0.0.2</version>
 
     <properties>
         <maven.compiler.source>21</maven.compiler.source>
@@ -61,6 +61,11 @@
         <dependency>
             <groupId>dev.mccue</groupId>
             <artifactId>purl</artifactId>
+            <version>0.0.1</version>
+        </dependency>
+        <dependency>
+            <groupId>dev.mccue</groupId>
+            <artifactId>progrock</artifactId>
             <version>0.0.1</version>
         </dependency>
     </dependencies>

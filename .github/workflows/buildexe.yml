@@ -5,7 +5,7 @@ jobs:
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
-        os: [ macos-latest, ubuntu-latest ]
+        os: [ macos-latest, ubuntu-latest, windows-latest ]
     steps:
       - uses: actions/checkout@v2
       - uses: extractions/setup-just@v1
@@ -13,7 +13,6 @@ jobs:
         with:
           version: 'latest'
           java-version: '21'
-          components: 'native-image'
           github-token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Build on Mac and Linux
@@ -24,7 +23,7 @@ jobs:
 
       - name: Build on Windows
         run: |
-          just exe native-image.exe
+          just exe native-image.cmd
         if: runner.os == 'Windows'
 
       - name: Upload binary

@@ -5,18 +5,25 @@ import dev.mccue.json.JsonDecoder;
 import dev.mccue.purl.InvalidException;
 import dev.mccue.purl.PackageUrl;
 import dev.mccue.resolve.*;
-import dev.mccue.resolve.maven.Classifier;
-import dev.mccue.resolve.maven.MavenCoordinate;
-import dev.mccue.resolve.maven.MavenRepository;
-import dev.mccue.resolve.maven.Scope;
+import dev.mccue.resolve.maven.*;
 import picocli.CommandLine;
 
 import java.io.File;
+import java.io.IOException;
 import java.io.PrintWriter;
+import java.io.UncheckedIOException;
+import java.net.URI;
+import java.net.URISyntaxException;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.util.*;
 import java.util.concurrent.Callable;
+import java.util.function.Consumer;
+import java.util.function.Function;
 
 @CommandLine.Command(
         name = "jresolve",
@@ -24,7 +31,7 @@ import java.util.concurrent.Callable;
         version = "ALPHA",
         description = "Resolves dependencies for the JVM."
 )
-public class CliMain implements Callable<Integer> {
+public final class CliMain implements Callable<Integer> {
     private final PrintWriter out;
     private final PrintWriter err;
 
@@ -61,6 +68,15 @@ public class CliMain implements Callable<Integer> {
     @CommandLine.Parameters(paramLabel = "dependencies", description = "Package urls of dependencies")
     public String[] dependencies = new String[] {};
 
+    private CacheKey uriToCacheKey(URI uri) {
+        var url = uri.toString();
+        if (url.endsWith("/")) {
+            url = url.substring(0, url.length() - 1);
+        }
+
+        return new CacheKey(Arrays.asList(url.split("((:)*/)+")));
+    }
+
     @Override
     public Integer call() throws Exception {
         var osName = System.getProperty("os.name")
@@ -71,35 +87,81 @@ public class CliMain implements Callable<Integer> {
             osArch = "x86_64";
         }
 
-
+        System.out.println(System.getProperty("user.dir"));
         var extraPaths = new ArrayList<Path>();
-
+        var httpsUrls = new ArrayList<URI>();
         var packageUrls = new ArrayList<PackageUrl>();
+
+        String finalOsArch = osArch;
+        Function<String, String> processLine = line -> {
+            var subbedLine = line
+                    .replace("{{os.name}}", osName)
+                    .replace("{{os.arch}}", finalOsArch)
+                    .replace("{{user.dir}}", System.getProperty("user.dir"))
+                    .trim();
+            if (!line.isBlank()) {
+                if (subbedLine.startsWith("pkg:")) {
+                    try {
+                        var packageUrl = PackageUrl.parse(subbedLine);
+                        if (packageUrl.getType().equals("maven")) {
+                            packageUrls.add(PackageUrl.parse(subbedLine));
+                        }
+                        else {
+                            return packageUrl.getType() + " is not a supported package url type.";
+                        }
+                    } catch (InvalidException e) {
+                        return e.getMessage();
+                    }
+                }
+                else if (subbedLine.startsWith("file:///")) {
+                    try {
+                        var uri = new URI(subbedLine);
+                        extraPaths.add(Paths.get(uri));
+                    } catch (URISyntaxException e) {
+                        return e.getMessage();
+                    }
+                }
+                else if (subbedLine.startsWith("file:")) {
+                    return "File URLs must start with file:///";
+                }
+                else if (subbedLine.startsWith("https://")) {
+                    try {
+                        var uri = new URI(subbedLine);
+                        httpsUrls.add(uri);
+                    } catch (URISyntaxException e) {
+                        return e.getMessage();
+                    }
+                }
+                else if (subbedLine.contains(":")) {
+                    return subbedLine.split(":")[0] + " is not a supported protocol.";
+                }
+                else {
+                    return "File paths must be prefixed with file:///\nFor relative paths, use file:///{{user.dir}}/ as a prefix.";
+                }
+            }
+
+          return null;
+        };
+
         for (var dependencyFile : this.dependencyFile) {
             for (var line : Files.readAllLines(dependencyFile.toPath())) {
-                var subbedLine = line
-                        .replace("{os.name}", osName)
-                        .replace("{os.arch}", osArch);
-                if (!line.isBlank()) {
-                    try {
-                        packageUrls.add(PackageUrl.parse(subbedLine));
-                    } catch (InvalidException e) {
-                        extraPaths.add(Path.of(subbedLine));
-                    }
+                var msg = processLine.apply(line);
+                if (msg != null) {
+                    err.println("Invalid dependency declaration: " + line);
+                    err.println(msg);
+                    err.flush();
+                    return -1;
                 }
             }
         }
 
         for (var line : dependencies) {
-            var subbedLine = line
-                    .replace("{os.name}", osName)
-                    .replace("{os.arch}", osArch);
-            if (!line.isBlank()) {
-                try {
-                    packageUrls.add(PackageUrl.parse(subbedLine));
-                } catch (InvalidException e) {
-                    extraPaths.add(Path.of(subbedLine));
-                }
+            var msg = processLine.apply(line);
+            if (msg != null) {
+                err.println("Invalid dependency declaration: " + line);
+                err.println(msg);
+                err.flush();
+                return -1;
             }
         }
 
@@ -120,61 +182,54 @@ public class CliMain implements Callable<Integer> {
 
         var dependencies = new ArrayList<Dependency>();
         for (var packageUrl : packageUrls) {
-            if (packageUrl.getType().equals("maven")) {
-                var group = new Group(String.join(".", Objects.requireNonNull(packageUrl.getNamespace(), "Package url must have a namespace")));
-                var artifact = new Artifact(packageUrl.getName());
-                var version = new Version(Objects.requireNonNull(packageUrl.getVersion(), "Package url must have a version"));
+            var group = new Group(String.join(".", Objects.requireNonNull(packageUrl.getNamespace(), "Package url must have a namespace")));
+            var artifact = new Artifact(packageUrl.getName());
+            var version = new Version(Objects.requireNonNull(packageUrl.getVersion(), "Package url must have a version"));
 
-                var repository = "central";
-                String classifierStr = null;
+            var repository = "central";
+            String classifierStr = null;
 
-                var qualifiers = packageUrl.getQualifiers();
-                if (qualifiers != null) {
-                    var repoQualifier = qualifiers.get("repository");
-                    if (repoQualifier != null) {
-                        repository = repoQualifier;
-                    }
-
-                    var classifierQualifier = qualifiers.get("classifier");
-                    if (classifierQualifier != null && !classifierQualifier.equals("default")) {
-                        classifierStr = classifierQualifier;
-                    }
+            var qualifiers = packageUrl.getQualifiers();
+            if (qualifiers != null) {
+                var repoQualifier = qualifiers.get("repository");
+                if (repoQualifier != null) {
+                    repository = repoQualifier;
                 }
 
-
-
-                var repo = repositories.get(repository);
-                if (repo == null) {
-                    err.println("Unknown repository: " + repository);
-                    return -1;
+                var classifierQualifier = qualifiers.get("classifier");
+                if (classifierQualifier != null && !classifierQualifier.equals("default")) {
+                    classifierStr = classifierQualifier;
                 }
-
-                var library = new Library(
-                        group,
-                        artifact,
-                        classifierStr == null ? Variant.DEFAULT : new Variant(classifierStr)
-                );
-
-                var classifier = classifierStr == null ? Classifier.EMPTY : new Classifier(classifierStr);
-
-                var coordinate = new MavenCoordinate(
-                        group,
-                        artifact,
-                        version,
-                        List.of(repo),
-                        List.of(Scope.COMPILE),
-                        classifier,
-                        Classifier.SOURCES,
-                        Classifier.JAVADOC
-                );
-
-                var dependency = new Dependency(library, coordinate);
-                dependencies.add(dependency);
             }
-            else {
-                err.println("Invalid package url type: " + packageUrl.getType());
+
+            var repo = repositories.get(repository);
+            if (repo == null) {
+                err.println("Unknown repository: " + repository);
+                err.flush();
                 return -1;
             }
+
+            var library = new Library(
+                    group,
+                    artifact,
+                    classifierStr == null ? Variant.DEFAULT : new Variant(classifierStr)
+            );
+
+            var classifier = classifierStr == null ? Classifier.EMPTY : new Classifier(classifierStr);
+
+            var coordinate = new MavenCoordinate(
+                    group,
+                    artifact,
+                    version,
+                    List.of(repo),
+                    List.of(Scope.COMPILE),
+                    classifier,
+                    Classifier.SOURCES,
+                    Classifier.JAVADOC
+            );
+
+            var dependency = new Dependency(library, coordinate);
+            dependencies.add(dependency);
         }
 
         var resolve = new Resolve();
@@ -183,15 +238,52 @@ public class CliMain implements Callable<Integer> {
         var resolution = resolve.run();
 
         if (printTree) {
-            resolution.printTree(out, List.of());
+            resolution.printTree(out);
+            out.flush();
             return 0;
         }
 
         var deps = resolution.fetch().run();
 
         if (outputFile != null) {
-            Files.createDirectories(outputFile.toPath().getParent());
+            if (outputFile.toPath().getParent() != null) {
+                Files.createDirectories(outputFile.toPath().getParent());
+            }
         }
+
+
+        var cache = Cache.standard();
+        if (!httpsUrls.isEmpty()) {
+            try (var httpClient = HttpClient.newHttpClient()) {
+                for (var httpsUrl : httpsUrls) {
+                    var cacheKey = uriToCacheKey(httpsUrl);
+                    try {
+                        extraPaths.add(cache.fetch(cacheKey, () -> {
+                                    try {
+                                        var response = httpClient.send(
+                                                HttpRequest.newBuilder(httpsUrl)
+                                                        .build(),
+                                                HttpResponse.BodyHandlers.ofInputStream());
+                                        if (response.statusCode() < 200 || response.statusCode() >= 300) {
+                                            throw new IOException("Bad status code: " + response.statusCode());
+                                        }
+                                        return response.body();
+                                    } catch (IOException e) {
+                                        throw new UncheckedIOException(e);
+                                    } catch (InterruptedException e) {
+                                        throw new RuntimeException(e);
+                                    }
+                                })
+                        );
+                    } catch (UncheckedIOException e) {
+                        err.println(e.getMessage());
+                        err.flush();
+                        return -1;
+                    }
+                }
+            }
+        }
+
 
         try (var outActual = outputFile == null ? out : new PrintWriter(outputFile)) {
             outActual.println(deps.path(extraPaths));
