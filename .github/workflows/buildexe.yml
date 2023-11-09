@@ -26,8 +26,16 @@ jobs:
           just exe_windows
         if: runner.os == 'Windows'
 
-      - name: Upload binary
+      - name: Upload Mac and Linux Binary
         uses: actions/upload-artifact@v2
         with:
           name: jresolve-${{ matrix.os }}
           path: jresolve
+        if: runner.os != 'Windows'
+
+      - name: Upload Windows Binary
+        uses: actions/upload-artifact@v2
+        with:
+          name: jresolve-${{ matrix.os }}.exe
+          path: jresolve.exe
+        if: runner.os == 'Windows'

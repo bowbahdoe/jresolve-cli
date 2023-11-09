@@ -11,7 +11,7 @@ make_reflect_config:
         picocli.codegen.aot.graalvm.ReflectionConfigGenerator \
         dev.mccue.resolve.cli.CliMain > reflect.json
 
-exe native='native-image':
+exe:
     ./mvnw clean
     ./mvnw compile
     ./mvnw dependency:copy-dependencies

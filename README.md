@@ -125,7 +125,7 @@ java --class-path @build/argfiles/runtime src/Main.java
 Most tools in the JVM support expanding arguments from argfiles with `@`, but there
 are some exceptions. A notable one is `jshell`, for some reason.
 
-### Including absolute file paths
+### Including file paths
 
 If you need to include a path to a specific file or folder in your final `--class-path` or `--module-path`
 you can do that in one of two ways.
