@@ -1,4 +1,4 @@
-name: GraalVM build
+name: Windows Build
 on: [push, pull_request, release]
 jobs:
   build:

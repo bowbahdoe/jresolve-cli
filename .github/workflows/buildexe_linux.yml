@@ -1,4 +1,4 @@
-name: GraalVM build
+name: Linux Build
 on: [push, pull_request, release]
 jobs:
   build:

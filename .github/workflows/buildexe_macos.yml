@@ -1,4 +1,4 @@
-name: GraalVM build
+name: MacOS Build
 on: [push, pull_request, release]
 jobs:
   build:
