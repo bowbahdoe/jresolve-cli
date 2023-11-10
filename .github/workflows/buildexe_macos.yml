@@ -20,5 +20,5 @@ jobs:
       - name: Upload Binary
         uses: actions/upload-artifact@v2
         with:
-          name: jresolve-${{ matrix.os }}
+          name: jresolve-macos-latest
           path: jresolve

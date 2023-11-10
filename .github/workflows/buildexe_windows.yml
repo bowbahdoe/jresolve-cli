@@ -19,5 +19,5 @@ jobs:
       - name: Upload Binary
         uses: actions/upload-artifact@v2
         with:
-          name: jresolve-${{ matrix.os }}.exe
+          name: jresolve-windows-latest.exe
           path: jresolve.exe
