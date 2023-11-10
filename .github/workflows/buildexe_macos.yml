@@ -1,0 +1,24 @@
+name: GraalVM build
+on: [push, pull_request, release]
+jobs:
+  build:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v2
+      - uses: extractions/setup-just@v1
+      - uses: graalvm/setup-graalvm@v1
+        with:
+          version: 'latest'
+          java-version: '21'
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build Binary
+        run: |
+          just exe
+          chmod +x jresolve
+
+      - name: Upload Binary
+        uses: actions/upload-artifact@v2
+        with:
+          name: jresolve-${{ matrix.os }}
+          path: jresolve
