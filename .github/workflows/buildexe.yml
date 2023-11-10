@@ -19,7 +19,13 @@ jobs:
         run: |
           just exe
           chmod +x jresolve
-        if: runner.os != 'Windows'
+        if: runner.os == 'MacOs'
+
+      - name: Build on Linux
+        run: |
+          just exe --static
+          chmod +x jresolve
+        if: runner.os == 'Ubunti'
 
       - name: Build on Windows
         run: |
