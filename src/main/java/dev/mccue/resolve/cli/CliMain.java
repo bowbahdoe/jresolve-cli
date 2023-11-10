@@ -5,7 +5,10 @@ import dev.mccue.json.JsonDecoder;
 import dev.mccue.purl.InvalidException;
 import dev.mccue.purl.PackageUrl;
 import dev.mccue.resolve.*;
-import dev.mccue.resolve.maven.*;
+import dev.mccue.resolve.maven.Classifier;
+import dev.mccue.resolve.maven.MavenCoordinate;
+import dev.mccue.resolve.maven.MavenRepository;
+import dev.mccue.resolve.maven.Scope;
 import picocli.CommandLine;
 
 import java.io.File;
@@ -22,7 +25,6 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.*;
 import java.util.concurrent.Callable;
-import java.util.function.Consumer;
 import java.util.function.Function;
 
 @CommandLine.Command(
@@ -165,9 +167,9 @@ public final class CliMain implements Callable<Integer> {
         }
 
 
-        var repositories = new HashMap<String, MavenRepository>();
-        repositories.put("central", MavenRepository.central());
-        repositories.put("local", MavenRepository.local());
+        var knownRepositories = new HashMap<String, MavenRepository>();
+        knownRepositories.put("central", MavenRepository.central());
+        knownRepositories.put("local", MavenRepository.local());
 
         if (mavenRepositoriesFile != null) {
             var repoDeclarations = JsonDecoder.object(
@@ -175,7 +177,9 @@ public final class CliMain implements Callable<Integer> {
                     Repository::fromJson
             );
             repoDeclarations.forEach((name, value) ->
-                    repositories.put(name, MavenRepository.remote(value.url()))
+                    knownRepositories.put(name, MavenRepository.remote(value.url(), () -> HttpClient.newBuilder()
+                            .followRedirects(HttpClient.Redirect.NORMAL)
+                            .build()))
             );
         }
 
@@ -185,14 +189,14 @@ public final class CliMain implements Callable<Integer> {
             var artifact = new Artifact(packageUrl.getName());
             var version = new Version(Objects.requireNonNull(packageUrl.getVersion(), "Package url must have a version"));
 
-            var repository = "central";
+            var repositoryNames = List.of("central");
             String classifierStr = null;
 
             var qualifiers = packageUrl.getQualifiers();
             if (qualifiers != null) {
                 var repoQualifier = qualifiers.get("repository");
                 if (repoQualifier != null) {
-                    repository = repoQualifier;
+                    repositoryNames = Arrays.asList(repoQualifier.split(","));
                 }
 
                 var classifierQualifier = qualifiers.get("classifier");
@@ -201,12 +205,17 @@ public final class CliMain implements Callable<Integer> {
                 }
             }
 
-            var repo = repositories.get(repository);
-            if (repo == null) {
-                err.println("Unknown repository: " + repository);
-                err.flush();
-                return -1;
+            var repositories = new ArrayList<MavenRepository>();
+            for (var repositoryName : repositoryNames)  {
+                var repo = knownRepositories.get(repositoryName);
+                if (repo == null) {
+                    err.println("Unknown repository: " + repositoryName);
+                    err.flush();
+                    return -1;
+                }
+                repositories.add(repo);
             }
+
 
             var library = new Library(
                     group,
@@ -220,7 +229,7 @@ public final class CliMain implements Callable<Integer> {
                     group,
                     artifact,
                     version,
-                    List.of(repo),
+                    List.copyOf(repositories),
                     List.of(Scope.COMPILE),
                     classifier,
                     Classifier.SOURCES,
@@ -253,7 +262,9 @@ public final class CliMain implements Callable<Integer> {
 
         var cache = Cache.standard();
         if (!httpsUrls.isEmpty()) {
-            var httpClient = HttpClient.newHttpClient();
+            var httpClient = HttpClient.newBuilder()
+                    .followRedirects(HttpClient.Redirect.NORMAL)
+                    .build();
             for (var httpsUrl : httpsUrls) {
                 var cacheKey = uriToCacheKey(httpsUrl);
                 try {
