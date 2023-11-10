@@ -8,10 +8,9 @@ still make breaking changes if I have to. Expect rough edges.
 
 ## Installation
 
-There are [packages](https://github.com/bowbahdoe/jresolve-cli/actions/runs/6788974508)
-generated in CI which can be added to your path. 
-
-For windows, I'm still debugging the GitHub actions setup.
+There are [packages](https://github.com/bowbahdoe/jresolve-cli/actions)
+generated in CI which can be added to your path. Click on the latest workflow run and there should be downloads at the
+bottom of the page.
 
 For M1 Macs, GitHub does not provide an executor with a compatible CPU, so I'm building
 those locally for now. Shoot me a message and I can send you an exe or you can build locally if
