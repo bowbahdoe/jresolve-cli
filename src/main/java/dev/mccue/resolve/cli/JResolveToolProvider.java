@@ -3,7 +3,6 @@ package dev.mccue.resolve.cli;
 import picocli.CommandLine;
 
 import java.io.PrintWriter;
-import java.util.Optional;
 import java.util.spi.ToolProvider;
 
 public final class JResolveToolProvider implements ToolProvider {

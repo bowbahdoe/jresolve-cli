@@ -15,11 +15,14 @@ import java.io.File;
 import java.io.IOException;
 import java.io.PrintWriter;
 import java.io.UncheckedIOException;
+import java.net.Authenticator;
+import java.net.PasswordAuthentication;
 import java.net.URI;
 import java.net.URISyntaxException;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
@@ -67,8 +70,15 @@ public final class CliMain implements Callable<Integer> {
     )
     public boolean printTree = false;
 
+    @CommandLine.Option(
+            names = {"--cache-path"},
+            description = "Path to use for caching the files fetched during dependency resolution"
+    )
+    public File cachePath = null;
+
     @CommandLine.Parameters(paramLabel = "dependencies", description = "Package urls of dependencies")
     public String[] dependencies = new String[] {};
+
 
     private CacheKey uriToCacheKey(URI uri) {
         var url = uri.toString();
@@ -177,9 +187,22 @@ public final class CliMain implements Callable<Integer> {
                     Repository::fromJson
             );
             repoDeclarations.forEach((name, value) ->
-                    knownRepositories.put(name, MavenRepository.remote(value.url(), () -> HttpClient.newBuilder()
-                            .followRedirects(HttpClient.Redirect.NORMAL)
-                            .build()))
+                    knownRepositories.put(name, MavenRepository.remote(value.url(), () -> {
+                        var builder = HttpClient.newBuilder()
+                                .followRedirects(HttpClient.Redirect.NORMAL);
+                        value.authentication().ifPresent(authentication -> {
+                            builder.authenticator(new Authenticator() {
+                                @Override
+                                protected PasswordAuthentication getPasswordAuthentication() {
+                                    return new PasswordAuthentication(
+                                            authentication.username(),
+                                            authentication.password().toCharArray()
+                                    );
+                                }
+                            });
+                        });
+                        return builder.build();
+                    }))
             );
         }
 
@@ -240,7 +263,10 @@ public final class CliMain implements Callable<Integer> {
             dependencies.add(dependency);
         }
 
-        var resolve = new Resolve();
+
+        var cache = cachePath == null ? Cache.standard() : Cache.standard(cachePath.toPath());
+
+        var resolve = new Resolve().withCache(cache);
         resolve.addDependencies(dependencies);
 
         var resolution = resolve.run();
@@ -251,7 +277,7 @@ public final class CliMain implements Callable<Integer> {
             return 0;
         }
 
-        var deps = resolution.fetch().run();
+        var deps = resolution.fetch().withCache(cache).run();
 
         if (outputFile != null) {
             if (outputFile.toPath().getParent() != null) {
@@ -259,8 +285,6 @@ public final class CliMain implements Callable<Integer> {
             }
         }
 
-
-        var cache = Cache.standard();
         if (!httpsUrls.isEmpty()) {
             var httpClient = HttpClient.newBuilder()
                     .followRedirects(HttpClient.Redirect.NORMAL)

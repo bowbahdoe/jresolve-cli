@@ -196,6 +196,24 @@ And include the repository to use on a specific coordinate.
 pkg:maven/com.github.thegatesdev/maple@4.0.0?repository=jitpack
 ```
 
+### Custom maven repositories with authentication
+
+To use a repository that requires username + password authentication,
+include an object with those credentials in your json file.
+
+```json 
+{
+  "jitpack": {
+    "url": "https://jitpack.io",
+    "authentication": {
+      "username": "bob",
+      "password": "123"
+    }
+  }
+}
+```
+
+
 ## Anticipated Questions
 
 
