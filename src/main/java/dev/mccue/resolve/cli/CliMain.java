@@ -15,10 +15,7 @@ import java.io.File;
 import java.io.IOException;
 import java.io.PrintWriter;
 import java.io.UncheckedIOException;
-import java.net.Authenticator;
-import java.net.PasswordAuthentication;
-import java.net.URI;
-import java.net.URISyntaxException;
+import java.net.*;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
@@ -26,8 +23,11 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.nio.file.StandardCopyOption;
 import java.util.*;
 import java.util.concurrent.Callable;
+import java.util.function.BiConsumer;
+import java.util.function.Consumer;
 import java.util.function.Function;
 
 @CommandLine.Command(
@@ -50,6 +50,20 @@ public final class CliMain implements Callable<Integer> {
             description = "File to output computed path to."
     )
     public File outputFile = null;
+
+    @CommandLine.Option(
+            names = {"--output-directory"},
+            description = "Directory to copy artifacts to."
+    )
+    public File outputDirectory = null;
+
+    /*
+    @CommandLine.Option(
+            names = {"--output-format"},
+            description = "Format to output"
+    )
+    public OutputFormat outputFormat = OutputFormat.path;
+     */
 
     @CommandLine.Option(
             names = {"--maven-repositories-file"},
@@ -253,7 +267,7 @@ public final class CliMain implements Callable<Integer> {
                     artifact,
                     version,
                     List.copyOf(repositories),
-                    List.of(Scope.COMPILE),
+                    List.of(Scope.COMPILE, Scope.RUNTIME),
                     classifier,
                     Classifier.SOURCES,
                     Classifier.JAVADOC
@@ -276,6 +290,37 @@ public final class CliMain implements Callable<Integer> {
             out.flush();
             return 0;
         }
+
+        /*
+        if (outputFormat == OutputFormat.manifest) {
+            resolution.selectedDependencies()
+                    .stream()
+                    .sorted(Comparator.comparing((Dependency dep) -> dep.library().group())
+                            .thenComparing(dep -> dep.library().artifact()))
+                    .forEach(dependency -> {
+                        if (dependency.coordinate() instanceof MavenCoordinate mavenCoordinate) {
+                            out.println("pkg:maven/"
+                                        + mavenCoordinate.group()
+                                        + "/"
+                                        +  mavenCoordinate.artifact()
+                                        + "@"
+                                        + mavenCoordinate.version()
+                                        + (
+                                                mavenCoordinate.classifier() == Classifier.EMPTY
+                                                        ? ""
+                                                        : "?classifier="
+                                                          + URLEncoder.encode(
+                                                                mavenCoordinate.classifier().value(),
+                                                                StandardCharsets.UTF_8
+                                                )
+                                        )
+                            );
+                        }
+                    });
+            out.flush();
+            return 0;
+        }
+         */
 
         var deps = resolution.fetch().withCache(cache).run();
 
@@ -318,8 +363,50 @@ public final class CliMain implements Callable<Integer> {
         }
 
 
-        try (var outActual = outputFile == null ? out : new PrintWriter(outputFile)) {
-            outActual.println(deps.path(extraPaths));
+        if (outputDirectory == null || outputFile != null) {
+            try (var outActual = outputFile == null ? out : new PrintWriter(outputFile)) {
+                outActual.println(deps.path(extraPaths));
+            }
+        }
+
+        if (outputDirectory != null && !deps.libraries().isEmpty()) {
+            Files.createDirectories(outputDirectory.toPath());
+
+
+            var artifacts = new LinkedHashMap<String, Path>();
+
+            Consumer<Path> addPath = (path) -> {
+                var fileName = path.getFileName()
+                        .toString();
+                if (artifacts.containsKey(fileName)) {
+                    err.println("Duplicate file: " + fileName + ". Need to rename." );
+                    err.flush();
+                    fileName = UUID.randomUUID() + "-" + fileName;
+                }
+                artifacts.put(fileName, path);
+            };
+
+            deps.libraries()
+                    .forEach((library, path) -> {
+                        addPath.accept(path);
+                    });
+
+            extraPaths.forEach(addPath);
+
+            artifacts.forEach((fileName, path) -> {
+                try {
+                    Files.copy(
+                            path,
+                            Path.of(outputDirectory.toString(), fileName),
+                            StandardCopyOption.REPLACE_EXISTING
+                    );
+                } catch (IOException e) {
+                    err.println("Could not copy file: " + path);
+                    err.flush();
+                    throw new UncheckedIOException(e);
+                }
+
+            });
         }
 
         return 0;

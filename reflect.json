@@ -6,9 +6,11 @@
     "allDeclaredMethods" : true,
     "allPublicMethods" : true,
     "fields" : [
+      { "name" : "cachePath" },
       { "name" : "dependencies" },
       { "name" : "dependencyFile" },
       { "name" : "mavenRepositoriesFile" },
+      { "name" : "outputDirectory" },
       { "name" : "outputFile" },
       { "name" : "printTree" }
     ]
