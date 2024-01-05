@@ -2,7 +2,7 @@ import dev.mccue.resolve.cli.JResolveToolProvider;
 
 import java.util.spi.ToolProvider;
 
-module dev.mccue.resolve.cli{
+module dev.mccue.resolve.cli {
     requires dev.mccue.resolve;
     requires dev.mccue.json;
     requires dev.mccue.purl;

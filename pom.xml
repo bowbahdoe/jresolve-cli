@@ -6,7 +6,7 @@
 
     <groupId>dev.mccue</groupId>
     <artifactId>jresolve-cli</artifactId>
-    <version>0.0.2</version>
+    <version>0.0.3</version>
 
     <properties>
         <maven.compiler.source>21</maven.compiler.source>
@@ -56,7 +56,7 @@
         <dependency>
             <groupId>dev.mccue</groupId>
             <artifactId>json</artifactId>
-            <version>0.2.4</version>
+            <version>0.3.1</version>
         </dependency>
         <dependency>
             <groupId>dev.mccue</groupId>
