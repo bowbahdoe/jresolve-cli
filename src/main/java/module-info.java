@@ -8,9 +8,11 @@ module dev.mccue.resolve.cli {
     requires dev.mccue.purl;
     requires info.picocli;
 
-    opens dev.mccue.resolve.cli to info.picocli;
+    opens dev.mccue.resolve.cli
+            to info.picocli;
 
     exports dev.mccue.resolve.cli;
 
-    provides ToolProvider with JResolveToolProvider;
+    provides ToolProvider
+            with JResolveToolProvider;
 }

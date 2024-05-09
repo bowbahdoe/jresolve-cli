@@ -80,9 +80,9 @@ fi
 
 if [[ "$version" == "" ]]; then
     if [[ "$dev_build" == "true" ]]; then
-        version="$(curl -sL https://raw.githubusercontent.com/bowbahdoe/jresolve/master/resources/JRESOLVE_VERSION)"
+        version="$(curl -sL https://raw.githubusercontent.com/bowbahdoe/jresolve-cli/main/JRESOLVE_VERSION)"
     else
-        version="$(curl -sL https://raw.githubusercontent.com/bowbahdoe/jresolve/master/resources/JRESOLVE_RELEASED_VERSION)"
+        version="$(curl -sL https://raw.githubusercontent.com/bowbahdoe/jresolve-cli/main/JRESOLVE_RELEASED_VERSION)"
     fi
 fi
 
@@ -128,10 +128,10 @@ if [[ "$version" == *-SNAPSHOT ]]
 then
     repo="jresolve-dev-builds"
 else
-    repo="jresolve"
+    repo="jresolve-cli"
 fi
 
-download_url="https://github.com/jresolve/$repo/releases/download/v$version/$filename"
+download_url="https://github.com/bowbahdoe/$repo/releases/download/v$version/$filename"
 
 # macOS only have shasum available by default
 # Some Linux distros (RHEL-like) only have sha256sum available by default (others have both)

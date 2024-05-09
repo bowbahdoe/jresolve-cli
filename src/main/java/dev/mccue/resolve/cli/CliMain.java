@@ -370,7 +370,7 @@ public final class CliMain implements Callable<Integer> {
             }
         }
 
-        if (outputDirectory != null && !deps.libraries().isEmpty()) {
+        if (outputDirectory != null && (!deps.libraries().isEmpty() || !extraPaths.isEmpty())) {
             Files.createDirectories(outputDirectory.toPath());
 
 

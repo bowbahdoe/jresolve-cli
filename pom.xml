@@ -6,12 +6,13 @@
 
     <groupId>dev.mccue</groupId>
     <artifactId>jresolve-cli</artifactId>
-    <version>0.0.3</version>
+    <version>2024.05.09</version>
 
     <properties>
         <maven.compiler.source>21</maven.compiler.source>
         <maven.compiler.target>21</maven.compiler.target>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+        <jdk.version>21.0.3</jdk.version>
     </properties>
 
     <name>jresolve-cli</name>
@@ -51,22 +52,17 @@
         <dependency>
             <groupId>dev.mccue</groupId>
             <artifactId>resolve</artifactId>
-            <version>0.0.4</version>
+            <version>2024.04.21</version>
         </dependency>
         <dependency>
             <groupId>dev.mccue</groupId>
             <artifactId>json</artifactId>
-            <version>0.3.1</version>
+            <version>2023.12.23</version>
         </dependency>
         <dependency>
             <groupId>dev.mccue</groupId>
             <artifactId>purl</artifactId>
-            <version>0.0.1</version>
-        </dependency>
-        <dependency>
-            <groupId>dev.mccue</groupId>
-            <artifactId>progrock</artifactId>
-            <version>0.0.1</version>
+            <version>2023.11.07</version>
         </dependency>
     </dependencies>
 
@@ -139,6 +135,103 @@
                                 </deploy>
                             </jreleaser>
                         </configuration>
+                    </plugin>
+                </plugins>
+            </build>
+        </profile>
+        <profile>
+            <id>uberjar</id>
+            <build>
+                <plugins>
+                    <plugin>
+                        <groupId>org.apache.maven.plugins</groupId>
+                        <artifactId>maven-shade-plugin</artifactId>
+                        <version>3.5.3</version>
+                        <executions>
+                            <execution>
+                                <phase>package</phase>
+                                <goals>
+                                    <goal>shade</goal>
+                                </goals>
+                            </execution>
+                        </executions>
+                        <configuration>
+                            <relocations>
+                                <relocation>
+                                    <pattern>picocli</pattern>
+                                    <shadedPattern>dev.mccue.resolve.uber.picocli</shadedPattern>
+                                </relocation>
+                                <relocation>
+                                    <pattern>dev.mccue</pattern>
+                                    <shadedPattern>dev.mccue.resolve.uber</shadedPattern>
+                                </relocation>
+                            </relocations>
+                            <transformers>
+                                <transformer implementation="org.apache.maven.plugins.shade.resource.ManifestResourceTransformer">
+                                    <mainClass>dev.mccue.resolve.uber.resolve.cli.CliMain</mainClass>
+                                </transformer>
+                            </transformers>
+                            <filters>
+                                <filter>
+                                    <artifact>*:*</artifact>
+                                    <excludes>
+                                        <exclude>module-info.class</exclude>
+                                        <exclude>META-INF/versions/*/module-info.class</exclude>
+                                    </excludes>
+                                </filter>
+                                <filter>
+                                    <artifact>dev.mccue:json</artifact>
+                                    <excludes>
+                                        <exclude>META-INF/MANIFEST.MF</exclude>
+                                    </excludes>
+                                </filter>
+                                <filter>
+                                    <artifact>info.picocli:picocli</artifact>
+                                    <excludes>
+                                        <exclude>META-INF/MANIFEST.MF</exclude>
+                                    </excludes>
+                                </filter>
+                                <filter>
+                                    <artifact>dev.mccue:purl</artifact>
+                                    <excludes>
+                                        <exclude>META-INF/MANIFEST.MF</exclude>
+                                    </excludes>
+                                </filter>
+                                <filter>
+                                    <artifact>dev.mccue:resolve</artifact>
+                                    <excludes>
+                                        <exclude>META-INF/MANIFEST.MF</exclude>
+                                    </excludes>
+                                </filter>
+                            </filters>
+                            <shadedArtifactAttached>true</shadedArtifactAttached>
+                            <shadedClassifierName>uber</shadedClassifierName>
+                        </configuration>
+                    </plugin>
+                    <plugin>
+                        <groupId>org.moditect</groupId>
+                        <artifactId>moditect-maven-plugin</artifactId>
+                        <version>1.2.1.Final</version>
+                        <executions>
+                            <execution>
+                                <id>add-module-info</id>
+                                <phase>package</phase>
+                                <goals>
+                                    <goal>add-module-info</goal>
+                                </goals>
+                                <configuration>
+                                    <overwriteExistingFiles>true</overwriteExistingFiles>
+                                    <modules>
+                                        <module>
+                                            <file>target/jresolve-cli-2024.05.09-uber.jar</file>
+                                            <moduleInfoFile>
+                                                src/main/uberjar/module-info.java
+                                            </moduleInfoFile>
+                                        </module>
+                                    </modules>
+                                </configuration>
+                            </execution>
+                        </executions>
                     </plugin>
                 </plugins>
             </build>
