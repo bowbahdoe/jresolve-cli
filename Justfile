@@ -7,7 +7,7 @@ make_reflect_config:
     ./mvnw -Ppicocli-codegen dependency:copy-dependencies
     ./mvnw package
     java \
-        --class-path target/jresolve-cli-0.0.3.jar:target/dependency/json-0.3.1.jar:target/dependency/picocli-4.7.5.jar:target/dependency/picocli-codegen-4.7.5.jar:target/dependency/purl-0.0.1.jar:target/dependency/resolve-0.0.6.jar \
+        --class-path target/dependency/picocli-codegen-4.7.5.jar:target/jresolve-cli-2024.05.09.jar:target/dependency/json-2023.12.23.jar:target/dependency/picocli-4.7.5.jar:target/dependency/purl-2023.11.07.jar:target/dependency/resolve-2024.04.21.jar \
         picocli.codegen.aot.graalvm.ReflectionConfigGenerator \
         dev.mccue.resolve.cli.CliMain > reflect.json
 
@@ -19,7 +19,7 @@ exe static='':
     native-image \
         --module-path target/dependency/json-2023.12.23.jar:target/dependency/picocli-4.7.5.jar:target/dependency/purl-2023.11.07.jar:target/dependency/resolve-2024.04.21.jar \
         -H:+UnlockExperimentalVMOptions -H:ReflectionConfigurationFiles=reflect.json -H:+ReportUnsupportedElementsAtRuntime \
-        -jar target/jresolve-cli-0.0.4.jar \
+        -jar target/jresolve-cli-2024.05.09.jar \
         {{static}} jresolve
 
 exe_windows:
@@ -27,7 +27,7 @@ exe_windows:
     ./mvnw compile
     ./mvnw dependency:copy-dependencies
     ./mvnw package
-    native-image.cmd --module-path "target\dependency\json-2023.12.23.jar;target\dependency\picocli-4.7.5.jar;target\dependency\purl-2023.11.07.jar;target\dependency\resolve-2024.04.21.jar" -H:+UnlockExperimentalVMOptions -H:ReflectionConfigurationFiles=reflect.json -H:+ReportUnsupportedElementsAtRuntime -jar "target\jresolve-cli-0.0.4.jar" jresolve
+    native-image.cmd --module-path "target\dependency\json-2023.12.23.jar;target\dependency\picocli-4.7.5.jar;target\dependency\purl-2023.11.07.jar;target\dependency\resolve-2024.04.21.jar" -H:+UnlockExperimentalVMOptions -H:ReflectionConfigurationFiles=reflect.json -H:+ReportUnsupportedElementsAtRuntime -jar "target\jresolve-cli-2024.05.09.jar" jresolve
 
 release:
     ./mvnw clean
