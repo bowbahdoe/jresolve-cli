@@ -34,7 +34,7 @@ import java.util.function.Function;
 @CommandLine.Command(
         name = "jresolve",
         mixinStandardHelpOptions = true,
-        version = "ALPHA",
+        version = "2024.05.09",
         description = "Resolves dependencies for the JVM."
 )
 public final class CliMain implements Callable<Integer> {
