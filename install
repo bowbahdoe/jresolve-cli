@@ -72,7 +72,7 @@ download_url="https://github.com/bowbahdoe/$repo/releases/download/v$version/jre
 mkdir -p "$download_dir" && (
     cd "$download_dir"
     echo -e "Downloading $download_url to $download_dir"
-    curl -o "$filename" -sL "$download_url"
+    curl -o "jresolve.jar" -sL "$download_url"
 )
 
 if [[ "$download_dir" != "$install_dir" ]]
