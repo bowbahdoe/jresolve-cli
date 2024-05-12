@@ -16,6 +16,13 @@ For M1 Macs, GitHub does not provide an executor with a compatible CPU, so I'm b
 those locally for now. Shoot me a message and I can send you an exe or you can build locally if
 you have maven, [just](https://github.com/casey/just), and [native-image](https://www.graalvm.org/22.0/reference-manual/native-image/) on your machine.
 
+For Mac and Linux you can install a version that depends on having Java 21+ installed
+with the following command.
+
+```
+bash < <(curl -s  https://raw.githubusercontent.com/bowbahdoe/jresolve-cli/main/install)
+```
+
 Very much a work in progress.
 
 ## Usage
