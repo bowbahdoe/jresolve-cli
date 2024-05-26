@@ -58,6 +58,18 @@ public final class CliMain implements Callable<Integer> {
     )
     public File outputDirectory = null;
 
+    @CommandLine.Option(
+            names = {"--resolution-file"},
+            description = "File to save resolutions in to."
+    )
+    public File resolutionFile = null;
+
+    @CommandLine.Option(
+            names = {"--select"},
+            description = "Selects dependencies from the given resolution file."
+    )
+    public boolean select = false;
+
     /*
     @CommandLine.Option(
             names = {"--output-format"},
@@ -222,6 +234,7 @@ public final class CliMain implements Callable<Integer> {
         }
 
         var dependencies = new ArrayList<Dependency>();
+
         for (var packageUrl : packageUrls) {
             var group = new Group(String.join(".", Objects.requireNonNull(packageUrl.getNamespace(), "Package url must have a namespace")));
             var artifact = new Artifact(packageUrl.getName());
