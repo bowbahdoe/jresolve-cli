@@ -227,7 +227,7 @@
                                     <overwriteExistingFiles>true</overwriteExistingFiles>
                                     <modules>
                                         <module>
-                                            <file>target/jresolve-cli-2024.05.10-uber.jar</file>
+                                            <file>target/jresolve-cli-2024.05.26-uber.jar</file>
                                             <moduleInfoFile>
                                                 src/main/uberjar/module-info.java
                                             </moduleInfoFile>
