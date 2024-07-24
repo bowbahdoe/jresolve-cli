@@ -344,7 +344,7 @@ public final class CliMain implements Callable<Integer> {
 
             if (dependenciesElement == null) {
                 dependenciesElement = document.createElement("dependencies");
-                rootElement.appendChild(document);
+                rootElement.appendChild(dependenciesElement);
             }
 
             var firstChild = dependenciesElement.getFirstChild();
