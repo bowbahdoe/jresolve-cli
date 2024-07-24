@@ -7,6 +7,7 @@ module dev.mccue.resolve.cli {
     requires dev.mccue.json;
     requires dev.mccue.purl;
     requires info.picocli;
+    requires java.xml;
 
     opens dev.mccue.resolve.cli
             to info.picocli;

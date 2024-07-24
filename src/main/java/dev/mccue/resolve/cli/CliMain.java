@@ -9,12 +9,21 @@ import dev.mccue.resolve.maven.Classifier;
 import dev.mccue.resolve.maven.MavenCoordinate;
 import dev.mccue.resolve.maven.MavenRepository;
 import dev.mccue.resolve.maven.Scope;
+import org.w3c.dom.Document;
+import org.w3c.dom.Node;
+import org.xml.sax.InputSource;
+import org.xml.sax.SAXException;
 import picocli.CommandLine;
 
-import java.io.File;
-import java.io.IOException;
-import java.io.PrintWriter;
-import java.io.UncheckedIOException;
+import javax.xml.parsers.DocumentBuilderFactory;
+import javax.xml.transform.OutputKeys;
+import javax.xml.transform.Transformer;
+import javax.xml.transform.TransformerFactory;
+import javax.xml.transform.dom.DOMSource;
+import javax.xml.transform.stream.StreamResult;
+import javax.xml.transform.stream.StreamSource;
+import java.io.*;
+import java.lang.module.ModuleFinder;
 import java.net.Authenticator;
 import java.net.PasswordAuthentication;
 import java.net.URI;
@@ -34,30 +43,34 @@ import java.util.function.Function;
 @CommandLine.Command(
         name = "jresolve",
         mixinStandardHelpOptions = true,
-        version = "v2024.05.26",
+        version = "v2024.07.24",
         description = "Resolves dependencies for the JVM."
 )
 public final class CliMain implements Callable<Integer> {
     private final PrintWriter out;
     private final PrintWriter err;
-
-    public CliMain(PrintWriter out, PrintWriter err) {
-        this.out = out;
-        this.err = err;
-    }
-
     @CommandLine.Option(
             names = {"--output-file"},
             description = "File to output computed path to."
     )
     public File outputFile = null;
-
     @CommandLine.Option(
             names = {"--output-directory"},
             description = "Directory to copy artifacts to."
     )
     public File outputDirectory = null;
+    @CommandLine.Option(
+            names = {"--enrich-pom"},
+            description = "Enriches the given pom.xml file with the result of dependency resolution."
+    )
+    public File enrichPom = null;
+    @CommandLine.Option(
+            names = {"--maven-repositories-file"},
+            description = "File containing maven repository definitions"
+    )
+    public File mavenRepositoriesFile;
 
+    /*
     @CommandLine.Option(
             names = {"--resolution-file"},
             description = "File to save resolutions in to."
@@ -68,7 +81,7 @@ public final class CliMain implements Callable<Integer> {
             names = {"--select"},
             description = "Selects dependencies from the given resolution file."
     )
-    public boolean select = false;
+    public boolean select = false; */
 
     /*
     @CommandLine.Option(
@@ -77,26 +90,17 @@ public final class CliMain implements Callable<Integer> {
     )
     public OutputFormat outputFormat = OutputFormat.path;
      */
-
-    @CommandLine.Option(
-            names = {"--maven-repositories-file"},
-            description = "File containing maven repository definitions"
-    )
-    public File mavenRepositoriesFile;
-
     @CommandLine.Option(
             names = {"--dependency-file"},
             description = "File containing package urls of dependencies",
             split = ","
     )
-    public File[] dependencyFile = new File[] {};
-
+    public File[] dependencyFile = new File[]{};
     @CommandLine.Option(
             names = {"--print-tree"},
             description = "Skip fetching artifacts and print the result of dependency resolution"
     )
     public boolean printTree = false;
-
     @CommandLine.Option(
             names = {"--cache-path"},
             description = "Path to use for caching the files fetched during dependency resolution"
@@ -104,8 +108,23 @@ public final class CliMain implements Callable<Integer> {
     public File cachePath = null;
 
     @CommandLine.Parameters(paramLabel = "dependencies", description = "Package urls of dependencies")
-    public String[] dependencies = new String[] {};
+    public String[] dependencies = new String[]{};
 
+    public CliMain(PrintWriter out, PrintWriter err) {
+        this.out = out;
+        this.err = err;
+    }
+
+
+    public CliMain() {
+        this(new PrintWriter(System.out), new PrintWriter(System.err));
+    }
+
+    public static void main(String... args) {
+        int exitCode = new CommandLine(new CliMain())
+                .execute(args);
+        System.exit(exitCode);
+    }
 
     private CacheKey uriToCacheKey(URI uri) {
         var url = uri.toString();
@@ -143,42 +162,36 @@ public final class CliMain implements Callable<Integer> {
                         var packageUrl = PackageUrl.parse(subbedLine);
                         if (packageUrl.getType().equals("maven")) {
                             packageUrls.add(PackageUrl.parse(subbedLine));
-                        }
-                        else {
+                        } else {
                             return packageUrl.getType() + " is not a supported package url type.";
                         }
                     } catch (InvalidException e) {
                         return e.getMessage();
                     }
-                }
-                else if (subbedLine.startsWith("file:///")) {
+                } else if (subbedLine.startsWith("file:///")) {
                     try {
                         var uri = new URI(subbedLine);
                         extraPaths.add(Paths.get(uri));
                     } catch (URISyntaxException e) {
                         return e.getMessage();
                     }
-                }
-                else if (subbedLine.startsWith("file:")) {
+                } else if (subbedLine.startsWith("file:")) {
                     return "File URLs must start with file:///";
-                }
-                else if (subbedLine.startsWith("https://")) {
+                } else if (subbedLine.startsWith("https://")) {
                     try {
                         var uri = new URI(subbedLine);
                         httpsUrls.add(uri);
                     } catch (URISyntaxException e) {
                         return e.getMessage();
                     }
-                }
-                else if (subbedLine.contains(":")) {
+                } else if (subbedLine.contains(":")) {
                     return subbedLine.split(":")[0] + " is not a supported protocol.";
-                }
-                else {
+                } else {
                     extraPaths.add(Path.of(subbedLine));
                 }
             }
 
-          return null;
+            return null;
         };
 
         for (var dependencyFile : this.dependencyFile) {
@@ -257,7 +270,7 @@ public final class CliMain implements Callable<Integer> {
             }
 
             var repositories = new ArrayList<MavenRepository>();
-            for (var repositoryName : repositoryNames)  {
+            for (var repositoryName : repositoryNames) {
                 var repo = knownRepositories.get(repositoryName);
                 if (repo == null) {
                     err.println("Unknown repository: " + repositoryName);
@@ -304,6 +317,109 @@ public final class CliMain implements Callable<Integer> {
             out.flush();
             return 0;
         }
+
+        if (enrichPom != null) {
+            var pomContents = Files.readString(enrichPom.toPath());
+            Document document;
+            try {
+                document =  DocumentBuilderFactory.newDefaultInstance()
+                        .newDocumentBuilder()
+                        .parse(new InputSource(new StringReader(pomContents)));
+            } catch (SAXException | IOException e) {
+                err.println("Error parsing POM file: " + e.getMessage());
+                err.flush();
+                return 1;
+            }
+            var rootElement = document.getDocumentElement();
+
+            Node dependenciesElement = null;
+            var rootElementChildren = rootElement.getChildNodes();
+            for (int i = 0; i < rootElementChildren.getLength(); i++) {
+                var projectElementChild = rootElementChildren.item(i);
+                if (projectElementChild.getNodeName().equals("dependencies")) {
+                    dependenciesElement = projectElementChild;
+                }
+
+            }
+
+            if (dependenciesElement == null) {
+                dependenciesElement = document.createElement("dependencies");
+                rootElement.appendChild(document);
+            }
+
+            var firstChild = dependenciesElement.getFirstChild();
+            while (firstChild != null) {
+                dependenciesElement.removeChild(firstChild);
+                firstChild = dependenciesElement.getFirstChild();
+            }
+
+            for (var dependency : resolution.selectedDependencies()) {
+                if (dependency.coordinate() instanceof MavenCoordinate mavenCoordinate) {
+                    var dependencyElement = document.createElement("dependency");
+
+                    var groupIdElement = document.createElement("groupId");
+                    groupIdElement.setTextContent(mavenCoordinate.group().value());
+                    dependencyElement.appendChild(groupIdElement);
+
+                    var artifactIdElement = document.createElement("artifactId");
+                    artifactIdElement.setTextContent(mavenCoordinate.artifact().value());
+                    dependencyElement.appendChild(artifactIdElement);
+
+                    var versionElement = document.createElement("version");
+                    versionElement.setTextContent(mavenCoordinate.version().toString());
+                    dependencyElement.appendChild(versionElement);
+
+                    dependenciesElement.appendChild(dependencyElement);
+                }
+            }
+
+            var transformerFactory = TransformerFactory.newDefaultInstance();
+
+            Transformer transformer = transformerFactory.newTransformer(new StreamSource(new ByteArrayInputStream("""
+                    <xsl:stylesheet version="1.0" xmlns:xsl="http://www.w3.org/1999/XSL/Transform">
+                      <xsl:output indent="yes"/>
+                      <xsl:strip-space elements="*"/>
+                    
+                      <xsl:template match="@*|node()">
+                        <xsl:copy>
+                          <xsl:apply-templates select="@*|node()"/>
+                        </xsl:copy>
+                      </xsl:template>
+                    
+                    </xsl:stylesheet>
+                    """.getBytes()
+            )));
+            transformer.setOutputProperty(OutputKeys.METHOD, "xml");
+            transformer.setOutputProperty(OutputKeys.ENCODING, "UTF-8");
+            transformer.setOutputProperty(OutputKeys.INDENT, "yes");
+
+            // pretty print
+
+            DOMSource source = new DOMSource(document);
+            try (var os = Files.newOutputStream(enrichPom.toPath())) {
+                transformer.transform(source, new StreamResult(os));
+            }
+        }
+
+/*
+        if (resolutionFile != null && !select) {
+            var deps = Json.arrayBuilder();
+            resolution.selectedDependencies()
+                    .forEach(dep -> {
+                        deps.add(DependencySerde.toJson(dep));
+                    });
+
+            var resolutionPath = resolutionFile.toPath();
+            if (resolutionPath.getParent() != null) {
+                Files.createDirectories(resolutionFile.toPath().getParent());
+            }
+
+            Files.writeString(
+                    resolutionFile.toPath(),
+                    Json.writeString(deps),
+                    StandardOpenOption.CREATE, StandardOpenOption.WRITE
+            );
+        } */
 
         /*
         if (outputFormat == OutputFormat.manifest) {
@@ -377,7 +493,7 @@ public final class CliMain implements Callable<Integer> {
         }
 
 
-        if (outputDirectory == null || outputFile != null) {
+        if ((outputDirectory == null && enrichPom == null) || outputFile != null) {
             try (var outActual = outputFile == null ? out : new PrintWriter(outputFile)) {
                 outActual.println(deps.path(extraPaths));
             }
@@ -393,7 +509,7 @@ public final class CliMain implements Callable<Integer> {
                 var fileName = path.getFileName()
                         .toString();
                 if (artifacts.containsKey(fileName)) {
-                    err.println("Duplicate file: " + fileName + ". Need to rename." );
+                    err.println("Duplicate file: " + fileName + ". Need to rename.");
                     err.flush();
                     fileName = UUID.randomUUID() + "-" + fileName;
                 }
@@ -424,15 +540,5 @@ public final class CliMain implements Callable<Integer> {
         }
 
         return 0;
-    }
-
-    public CliMain() {
-        this(new PrintWriter(System.out), new PrintWriter(System.err));
-    }
-
-    public static void main(String... args) {
-        int exitCode = new CommandLine(new CliMain())
-                .execute(args);
-        System.exit(exitCode);
     }
 }

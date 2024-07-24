@@ -9,6 +9,7 @@
       { "name" : "cachePath" },
       { "name" : "dependencies" },
       { "name" : "dependencyFile" },
+      { "name" : "enrichPom" },
       { "name" : "mavenRepositoriesFile" },
       { "name" : "outputDirectory" },
       { "name" : "outputFile" },
