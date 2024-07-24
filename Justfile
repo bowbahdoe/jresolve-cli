@@ -17,7 +17,7 @@ exe static='':
     ./mvnw dependency:copy-dependencies
     ./mvnw package
     native-image \
-        --module-path target/dependency/json-2023.12.23.jar:target/dependency/picocli-4.7.5.jar:target/dependency/purl-2023.11.07.jar:target/dependency/resolve-2024.07.24.jar \
+        --module-path target/dependency/json-2023.12.23.jar:target/dependency/picocli-4.7.5.jar:target/dependency/purl-2023.11.07.jar:target/dependency/resolve-2024.05.26.jar \
         -H:+UnlockExperimentalVMOptions -H:ReflectionConfigurationFiles=reflect.json -H:+ReportUnsupportedElementsAtRuntime \
         -jar target/jresolve-cli-2024.07.24.jar \
         {{static}} jresolve
@@ -27,7 +27,7 @@ exe_windows:
     ./mvnw compile
     ./mvnw dependency:copy-dependencies
     ./mvnw package
-    native-image.cmd --module-path "target\dependency\json-2023.12.23.jar;target\dependency\picocli-4.7.5.jar;target\dependency\purl-2023.11.07.jar;target\dependency\resolve-2024.07.24.jar" -H:+UnlockExperimentalVMOptions -H:ReflectionConfigurationFiles=reflect.json -H:+ReportUnsupportedElementsAtRuntime -jar "target\jresolve-cli-2024.05.26.jar" jresolve
+    native-image.cmd --module-path "target\dependency\json-2023.12.23.jar;target\dependency\picocli-4.7.5.jar;target\dependency\purl-2023.11.07.jar;target\dependency\resolve-2024.05.26.jar" -H:+UnlockExperimentalVMOptions -H:ReflectionConfigurationFiles=reflect.json -H:+ReportUnsupportedElementsAtRuntime -jar "target\jresolve-cli-2024.05.26.jar" jresolve
 
 release:
     ./mvnw clean
