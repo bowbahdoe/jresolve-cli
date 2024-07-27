@@ -23,7 +23,9 @@ import javax.xml.transform.dom.DOMSource;
 import javax.xml.transform.stream.StreamResult;
 import javax.xml.transform.stream.StreamSource;
 import java.io.*;
+import java.lang.module.ModuleDescriptor;
 import java.lang.module.ModuleFinder;
+import java.lang.module.ModuleReference;
 import java.net.Authenticator;
 import java.net.PasswordAuthentication;
 import java.net.URI;
@@ -31,19 +33,17 @@ import java.net.URISyntaxException;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.nio.file.Paths;
-import java.nio.file.StandardCopyOption;
+import java.nio.file.*;
+import java.nio.file.attribute.BasicFileAttributes;
 import java.util.*;
 import java.util.concurrent.Callable;
-import java.util.function.Consumer;
 import java.util.function.Function;
+import java.util.stream.Collectors;
 
 @CommandLine.Command(
         name = "jresolve",
         mixinStandardHelpOptions = true,
-        version = "v2024.07.24",
+        version = "v2024.07.27",
         description = "Resolves dependencies for the JVM."
 )
 public final class CliMain implements Callable<Integer> {
@@ -107,8 +107,21 @@ public final class CliMain implements Callable<Integer> {
     )
     public File cachePath = null;
 
+    @CommandLine.Option(
+            names = {"--use-module-names"},
+            description = "Save files in the output directory using the module names the jars represent."
+    )
+    public boolean useModuleNames = false;
+
+    @CommandLine.Option(
+            names = "--purge-output-directory",
+            description = "Purges the specified output directory on run"
+    )
+    public boolean purgeOutputDirectory = false;
+
     @CommandLine.Parameters(paramLabel = "dependencies", description = "Package urls of dependencies")
     public String[] dependencies = new String[]{};
+
 
     public CliMain(PrintWriter out, PrintWriter err) {
         this.out = out;
@@ -320,9 +333,10 @@ public final class CliMain implements Callable<Integer> {
 
         if (enrichPom != null) {
             var pomContents = Files.readString(enrichPom.toPath());
+            var factory = DocumentBuilderFactory.newDefaultInstance();
             Document document;
             try {
-                document =  DocumentBuilderFactory.newDefaultInstance()
+                document = factory
                         .newDocumentBuilder()
                         .parse(new InputSource(new StringReader(pomContents)));
             } catch (SAXException | IOException e) {
@@ -499,29 +513,91 @@ public final class CliMain implements Callable<Integer> {
             }
         }
 
+        if (outputDirectory != null && purgeOutputDirectory) {
+            Files.walkFileTree(outputDirectory.toPath(), new SimpleFileVisitor<>() {
+                @Override
+                public FileVisitResult visitFile(Path file,
+                                                 BasicFileAttributes attrs) throws IOException {
+                    Files.delete(file);
+                    return FileVisitResult.CONTINUE;
+                }
+
+                @Override
+                public FileVisitResult postVisitDirectory(Path dir,
+                                                          IOException e) throws IOException {
+                    if (e == null) {
+                        Files.delete(dir);
+                        return FileVisitResult.CONTINUE;
+                    } else {
+                        throw e;
+                    }
+                }
+
+            });
+        }
+
         if (outputDirectory != null && (!deps.libraries().isEmpty() || !extraPaths.isEmpty())) {
             Files.createDirectories(outputDirectory.toPath());
 
 
             var artifacts = new LinkedHashMap<String, Path>();
 
-            Consumer<Path> addPath = (path) -> {
-                var fileName = path.getFileName()
-                        .toString();
-                if (artifacts.containsKey(fileName)) {
-                    err.println("Duplicate file: " + fileName + ". Need to rename.");
-                    err.flush();
-                    fileName = UUID.randomUUID() + "-" + fileName;
+            Function<Path, Integer> addPath = (path) -> {
+                if (useModuleNames) {
+                    var modules = ModuleFinder.of(path).findAll().toArray(ModuleReference[]::new);
+                    if (modules.length == 0) {
+                        err.println("No module found: " + path);
+                        err.flush();
+                        return 1;
+                    }
+                    if (modules.length > 1) {
+                        err.println("More than one module found: " + path);
+                        err.println(
+                                Arrays.stream(modules)
+                                        .map(ModuleReference::descriptor)
+                                        .map(ModuleDescriptor::name)
+                                        .collect(Collectors.joining(", "))
+                        );
+                        err.flush();
+                        return 1;
+                    }
+
+                    var module = modules[0];
+
+                    var fileName = module.descriptor().name() + ".jar";
+                    if (artifacts.containsKey(fileName)) {
+                        err.println("Duplicate module: " + module.descriptor().name());
+                        err.flush();
+                        return 1;
+                    }
+                    artifacts.put(fileName, path);
+                } else {
+                    var fileName = path.getFileName()
+                            .toString();
+                    if (artifacts.containsKey(fileName)) {
+                        err.println("Duplicate file: " + fileName + ". Need to rename.");
+                        err.flush();
+                        fileName = UUID.randomUUID() + "-" + fileName;
+                    }
+                    artifacts.put(fileName, path);
                 }
-                artifacts.put(fileName, path);
+
+                return 0;
             };
 
-            deps.libraries()
-                    .forEach((library, path) -> {
-                        addPath.accept(path);
-                    });
+            for (var path : deps.libraries().values()) {
+                int status = addPath.apply(path);
+                if (status != 0) {
+                    return status;
+                }
+            }
 
-            extraPaths.forEach(addPath);
+            for (var extraPath : extraPaths) {
+                int status = addPath.apply(extraPath);
+                if (status != 0) {
+                    return status;
+                }
+            }
 
             artifacts.forEach((fileName, path) -> {
                 try {
