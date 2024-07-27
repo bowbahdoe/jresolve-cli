@@ -82,7 +82,7 @@ then
         echo "Moving $install_dir/jresolve to $install_dir/jresolve.old"
         mv -f "$install_dir/jresolve" "$install_dir/jresolve.old"
     fi
-    echo "/usr/bin/env -S java" > "$install_dir/jresolve"
+    echo "#!/usr/bin/env -S java" > "$install_dir/jresolve"
     cat  "$download_dir/jresolve.jar" >> "$install_dir/jresolve"
     chmod +x "$install_dir/jresolve"
 fi
