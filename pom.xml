@@ -6,7 +6,7 @@
 
     <groupId>dev.mccue</groupId>
     <artifactId>jresolve-cli</artifactId>
-    <version>2024.07.27</version>
+    <version>2024.08.23</version>
 
     <properties>
         <maven.compiler.source>21</maven.compiler.source>
@@ -227,7 +227,7 @@
                                     <overwriteExistingFiles>true</overwriteExistingFiles>
                                     <modules>
                                         <module>
-                                            <file>target/jresolve-cli-2024.07.27-uber.jar</file>
+                                            <file>target/jresolve-cli-2024.08.23-uber.jar</file>
                                             <moduleInfoFile>
                                                 src/main/uberjar/module-info.java
                                             </moduleInfoFile>
