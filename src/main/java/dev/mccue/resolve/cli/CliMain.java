@@ -514,26 +514,31 @@ public final class CliMain implements Callable<Integer> {
         }
 
         if (outputDirectory != null && purgeOutputDirectory) {
-            Files.walkFileTree(outputDirectory.toPath(), new SimpleFileVisitor<>() {
-                @Override
-                public FileVisitResult visitFile(Path file,
-                                                 BasicFileAttributes attrs) throws IOException {
-                    Files.delete(file);
-                    return FileVisitResult.CONTINUE;
-                }
-
-                @Override
-                public FileVisitResult postVisitDirectory(Path dir,
-                                                          IOException e) throws IOException {
-                    if (e == null) {
-                        Files.delete(dir);
+            try {
+                Files.walkFileTree(outputDirectory.toPath(), new SimpleFileVisitor<>() {
+                    @Override
+                    public FileVisitResult visitFile(Path file,
+                                                     BasicFileAttributes attrs) throws IOException {
+                        Files.delete(file);
                         return FileVisitResult.CONTINUE;
-                    } else {
-                        throw e;
                     }
-                }
 
-            });
+                    @Override
+                    public FileVisitResult postVisitDirectory(Path dir,
+                                                              IOException e) throws IOException {
+                        if (e == null) {
+                            Files.delete(dir);
+                            return FileVisitResult.CONTINUE;
+                        } else {
+                            throw e;
+                        }
+                    }
+
+                });
+            } catch (NoSuchFileException e) {
+                // NoOp
+            }
+
         }
 
         if (outputDirectory != null && (!deps.libraries().isEmpty() || !extraPaths.isEmpty())) {
