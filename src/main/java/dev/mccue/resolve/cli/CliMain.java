@@ -43,7 +43,7 @@ import java.util.stream.Collectors;
 @CommandLine.Command(
         name = "jresolve",
         mixinStandardHelpOptions = true,
-        version = "v2024.08.23",
+        version = "v2025.02.11",
         description = "Resolves dependencies for the JVM."
 )
 public final class CliMain implements Callable<Integer> {
