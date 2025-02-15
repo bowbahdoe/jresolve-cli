@@ -177,6 +177,31 @@ public final class CliMain implements Callable<Integer> {
             var dependencies = optionalField(project, "dependencies", array())
                     .orElse(null);
             if (dependencies != null && !dependencies.isEmpty()) {
+                var dependencySetsPath = Path.of("dependencySets");
+                try {
+                    Files.walkFileTree(dependencySetsPath, new SimpleFileVisitor<>() {
+                        @Override
+                        public FileVisitResult visitFile(Path file,
+                                                         BasicFileAttributes attrs) throws IOException {
+                            Files.delete(file);
+                            return FileVisitResult.CONTINUE;
+                        }
+
+                        @Override
+                        public FileVisitResult postVisitDirectory(Path dir,
+                                                                  IOException e) throws IOException {
+                            if (e == null) {
+                                Files.delete(dir);
+                                return FileVisitResult.CONTINUE;
+                            } else {
+                                throw e;
+                            }
+                        }
+
+                    });
+                } catch (NoSuchFileException e) {
+                    // NoOp
+                }
 
                 for (var dependencyObject : dependencies) {
                     var coordinate = field(dependencyObject, "coordinate", string());
@@ -244,31 +269,7 @@ public final class CliMain implements Callable<Integer> {
 
                     }));
 
-                    var dependencySetsPath = Path.of("dependencySets");
-                    try {
-                        Files.walkFileTree(dependencySetsPath, new SimpleFileVisitor<>() {
-                            @Override
-                            public FileVisitResult visitFile(Path file,
-                                                             BasicFileAttributes attrs) throws IOException {
-                                Files.delete(file);
-                                return FileVisitResult.CONTINUE;
-                            }
 
-                            @Override
-                            public FileVisitResult postVisitDirectory(Path dir,
-                                                                      IOException e) throws IOException {
-                                if (e == null) {
-                                    Files.delete(dir);
-                                    return FileVisitResult.CONTINUE;
-                                } else {
-                                    throw e;
-                                }
-                            }
-
-                        });
-                    } catch (NoSuchFileException e) {
-                        // NoOp
-                    }
 
                     Files.createDirectories(dependencySetsPath);
                     Files.writeString(dependencySetsPath.resolve(dependencySet), String.join("\n", args));
