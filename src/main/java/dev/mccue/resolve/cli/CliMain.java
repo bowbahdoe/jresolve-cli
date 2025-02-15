@@ -48,7 +48,7 @@ import static dev.mccue.json.JsonDecoder.string;
 @CommandLine.Command(
         name = "jresolve",
         mixinStandardHelpOptions = true,
-        version = "v2025.02.15",
+        version = "2025.02.15",
         description = "Resolves dependencies for the JVM."
 )
 public final class CliMain implements Callable<Integer> {
@@ -154,6 +154,12 @@ public final class CliMain implements Callable<Integer> {
 
     @CommandLine.Command(name = "install")
     public int install() throws Exception {
+        if (!Files.exists(Path.of("jproject.toml"))) {
+            err.println("No jproject.toml found");
+            err.flush();
+            return 1;
+        }
+
         var toml = Toml.parse(Path.of("jproject.toml"));
         if (toml.hasErrors()) {
             System.err.println("Encountered errors when parsing jproject.toml");
@@ -170,6 +176,14 @@ public final class CliMain implements Callable<Integer> {
                     "defaultUsage",
                     string().map(Usage::new)
             ).orElse(null);
+
+            // Map from dependency set to the dependency set it extends
+            var dependencySetExtends = new HashMap<String, String>();
+            optionalField(project, "dependencySets", object(
+                    optionalField("extends", string())
+            ), Map.<String, Optional<String>>of()).forEach((set, extends_) -> {
+                extends_.ifPresent(e -> dependencySetExtends.put(set, e));
+            });
 
             record UsagesAndDep(List<Usage> usages, Dependency dependency) {}
 
@@ -219,12 +233,25 @@ public final class CliMain implements Callable<Integer> {
                         }
                     }
 
-                    var dependencySets = optionalField(dependencyObject, "dependencySets", JsonDecoder.oneOf(
+                    Collection<String> dependencySets = optionalField(dependencyObject, "dependencySets", JsonDecoder.oneOf(
                             string().map(List::of),
                             array(string())
                     )).orElse(null);
                     if (dependencySets == null) {
                         dependencySets = List.of("default");
+                    }
+
+                    dependencySets = new LinkedHashSet<>(dependencySets);
+
+                    // Doing the tree logic for extends is annoying
+                    // Doing N passes over the array works too and is less
+                    // annoying to write, if harder to read and slower and bad
+                    for (int i = 0; i < dependencySetExtends.size(); i++) {
+                        for (var entry : dependencySetExtends.entrySet()) {
+                            if (dependencySets.contains(entry.getValue())) {
+                                dependencySets.add(entry.getKey());
+                            }
+                        }
                     }
 
                     for (String dependencySet : dependencySets) {
