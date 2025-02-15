@@ -6,7 +6,7 @@
 
     <groupId>dev.mccue</groupId>
     <artifactId>jresolve-cli</artifactId>
-    <version>2025.02.11</version>
+    <version>2025.02.14</version>
 
     <properties>
         <maven.compiler.source>21</maven.compiler.source>
@@ -52,17 +52,22 @@
         <dependency>
             <groupId>dev.mccue</groupId>
             <artifactId>resolve</artifactId>
-            <version>2024.05.26</version>
+            <version>2025.02.14</version>
         </dependency>
         <dependency>
             <groupId>dev.mccue</groupId>
             <artifactId>json</artifactId>
-            <version>2023.12.23</version>
+            <version>2024.11.20</version>
         </dependency>
         <dependency>
             <groupId>dev.mccue</groupId>
             <artifactId>purl</artifactId>
             <version>2023.11.07</version>
+        </dependency>
+        <dependency>
+            <groupId>org.tomlj</groupId>
+            <artifactId>tomlj</artifactId>
+            <version>1.1.1</version>
         </dependency>
     </dependencies>
 
@@ -166,6 +171,10 @@
                                     <shadedPattern>dev.mccue.resolve.uber.picocli</shadedPattern>
                                 </relocation>
                                 <relocation>
+                                    <pattern>org.tomlj</pattern>
+                                    <shadedPattern>dev.mccue.resolve.uber.tomlj</shadedPattern>
+                                </relocation>
+                                <relocation>
                                     <pattern>dev.mccue</pattern>
                                     <shadedPattern>dev.mccue.resolve.uber</shadedPattern>
                                 </relocation>
@@ -207,6 +216,12 @@
                                         <exclude>META-INF/MANIFEST.MF</exclude>
                                     </excludes>
                                 </filter>
+                                <filter>
+                                    <artifact>org.tomlj:tomlj</artifact>
+                                    <excludes>
+                                        <exclude>META-INF/MANIFEST.MF</exclude>
+                                    </excludes>
+                                </filter>
                             </filters>
                             <shadedArtifactAttached>true</shadedArtifactAttached>
                             <shadedClassifierName>uber</shadedClassifierName>
@@ -227,7 +242,7 @@
                                     <overwriteExistingFiles>true</overwriteExistingFiles>
                                     <modules>
                                         <module>
-                                            <file>target/jresolve-cli-2025.02.11-uber.jar</file>
+                                            <file>target/jresolve-cli-2025.02.14-uber.jar</file>
                                             <moduleInfoFile>
                                                 src/main/uberjar/module-info.java
                                             </moduleInfoFile>

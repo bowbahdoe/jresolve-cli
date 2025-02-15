@@ -9,6 +9,7 @@ import dev.mccue.resolve.maven.Classifier;
 import dev.mccue.resolve.maven.MavenCoordinate;
 import dev.mccue.resolve.maven.MavenRepository;
 import dev.mccue.resolve.maven.Scope;
+import org.tomlj.Toml;
 import org.w3c.dom.Document;
 import org.w3c.dom.Node;
 import org.xml.sax.InputSource;
@@ -39,6 +40,10 @@ import java.util.*;
 import java.util.concurrent.Callable;
 import java.util.function.Function;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
+
+import static dev.mccue.json.JsonDecoder.*;
+import static dev.mccue.json.JsonDecoder.string;
 
 @CommandLine.Command(
         name = "jresolve",
@@ -122,7 +127,6 @@ public final class CliMain implements Callable<Integer> {
     @CommandLine.Parameters(paramLabel = "dependencies", description = "Package urls of dependencies")
     public String[] dependencies = new String[]{};
 
-
     public CliMain(PrintWriter out, PrintWriter err) {
         this.out = out;
         this.err = err;
@@ -148,6 +152,132 @@ public final class CliMain implements Callable<Integer> {
         return new CacheKey(Arrays.asList(url.split("((:)*/)+")));
     }
 
+    @CommandLine.Command(name = "install")
+    public int install() throws Exception {
+        var toml = Toml.parse(Path.of("jproject.toml"));
+        if (toml.hasErrors()) {
+            System.err.println("Encountered errors when parsing jproject.toml");
+            toml.errors().forEach(error -> System.err.println(error.toString()));
+            return 1;
+        }
+
+        var projectToml = toml.getTable("project");
+
+        if (projectToml != null) {
+            var project = Json.read(projectToml.toJson());
+            var defaultUsage = optionalField(
+                    project,
+                    "defaultUsage",
+                    string().map(Usage::new)
+            ).orElse(null);
+
+            record UsagesAndDep(List<Usage> usages, Dependency dependency) {}
+
+            var dependencySetToDeps = new HashMap<String, List<UsagesAndDep>>();
+            var dependencies = optionalField(project, "dependencies", array())
+                    .orElse(null);
+            if (dependencies != null && !dependencies.isEmpty()) {
+
+                for (var dependencyObject : dependencies) {
+                    var coordinate = field(dependencyObject, "coordinate", string());
+                    Dependency dependency = Dependency.fromCoordinate(coordinate);
+
+                    var usages = optionalField(dependencyObject, "usage", JsonDecoder.oneOf(
+                            string().map(Usage::new).map(List::of),
+                            array(string().map(Usage::new))
+                    )).orElse(List.of());
+                    if (usages.isEmpty()) {
+                        if (defaultUsage == null) {
+                            err.println("Dependency missing \"usage\" and no \"defaultUsage\" specified: " + coordinate);
+                            err.flush();
+                            return 1;
+                        }
+                    }
+
+                    var dependencySets = optionalField(dependencyObject, "dependencySets", JsonDecoder.oneOf(
+                            string().map(List::of),
+                            array(string())
+                    )).orElse(null);
+                    if (dependencySets == null) {
+                        dependencySets = List.of("default");
+                    }
+
+                    for (String dependencySet : dependencySets) {
+                        dependencySetToDeps.putIfAbsent(dependencySet, new ArrayList<>());
+                        dependencySetToDeps.get(dependencySet).add(new UsagesAndDep(usages, dependency));
+                    }
+                }
+
+                for (var entry : dependencySetToDeps.entrySet()) {
+                    var dependencySet = entry.getKey();
+
+                    var libraryToUsages = new LinkedHashMap<Library, Set<Usage>>();
+
+                    var usagesAndDeps = entry.getValue();
+
+                    var resolve = new Resolve();
+                    for (var usagesAndDep : usagesAndDeps) {
+                        libraryToUsages.put(usagesAndDep.dependency.library(), new LinkedHashSet<>(usagesAndDep.usages));
+                        resolve.addDependency(usagesAndDep.dependency);
+                    }
+
+                    var resolution = resolve.run();
+
+                    var librariesForUsage = resolution.librariesForUsage(
+                            libraryToUsages,
+                            defaultUsage
+                    );
+
+                    var fetch = resolution.fetch().run();
+
+                    var args = new ArrayList<String>();
+                    librariesForUsage.forEach(((usage, libraries) -> {
+                        if (!libraries.isEmpty()) {
+                            var libToPath = new HashMap<>(fetch.libraries());
+                            libToPath.keySet().retainAll(libraries);
+                            args.add(usage.value());
+                            args.add(libToPath.values()
+                                    .stream()
+                                    .map(Path::toString)
+                                    .collect(Collectors.joining(File.pathSeparator)));
+                        }
+
+                    }));
+
+                    var dependencySetsPath = Path.of("dependencySets");
+                    try {
+                        Files.walkFileTree(dependencySetsPath, new SimpleFileVisitor<>() {
+                            @Override
+                            public FileVisitResult visitFile(Path file,
+                                                             BasicFileAttributes attrs) throws IOException {
+                                Files.delete(file);
+                                return FileVisitResult.CONTINUE;
+                            }
+
+                            @Override
+                            public FileVisitResult postVisitDirectory(Path dir,
+                                                                      IOException e) throws IOException {
+                                if (e == null) {
+                                    Files.delete(dir);
+                                    return FileVisitResult.CONTINUE;
+                                } else {
+                                    throw e;
+                                }
+                            }
+
+                        });
+                    } catch (NoSuchFileException e) {
+                        // NoOp
+                    }
+
+                    Files.createDirectories(dependencySetsPath);
+                    Files.writeString(dependencySetsPath.resolve(dependencySet), String.join("\n", args));
+                }
+            }
+        }
+        return 0;
+    }
+
     @Override
     public Integer call() throws Exception {
         var osName = System.getProperty("os.name")
@@ -158,76 +288,8 @@ public final class CliMain implements Callable<Integer> {
             osArch = "x86_64";
         }
 
-        var extraPaths = new ArrayList<Path>();
-        var httpsUrls = new ArrayList<URI>();
-        var packageUrls = new ArrayList<PackageUrl>();
 
-        String finalOsArch = osArch;
-        Function<String, String> processLine = line -> {
-            var subbedLine = line
-                    .replace("{{os.name}}", osName)
-                    .replace("{{os.arch}}", finalOsArch)
-                    .replace("{{user.dir}}", System.getProperty("user.dir"))
-                    .trim();
-            if (!line.isBlank()) {
-                if (subbedLine.startsWith("pkg:")) {
-                    try {
-                        var packageUrl = PackageUrl.parse(subbedLine);
-                        if (packageUrl.getType().equals("maven")) {
-                            packageUrls.add(PackageUrl.parse(subbedLine));
-                        } else {
-                            return packageUrl.getType() + " is not a supported package url type.";
-                        }
-                    } catch (InvalidException e) {
-                        return e.getMessage();
-                    }
-                } else if (subbedLine.startsWith("file:///")) {
-                    try {
-                        var uri = new URI(subbedLine);
-                        extraPaths.add(Paths.get(uri));
-                    } catch (URISyntaxException e) {
-                        return e.getMessage();
-                    }
-                } else if (subbedLine.startsWith("file:")) {
-                    return "File URLs must start with file:///";
-                } else if (subbedLine.startsWith("https://")) {
-                    try {
-                        var uri = new URI(subbedLine);
-                        httpsUrls.add(uri);
-                    } catch (URISyntaxException e) {
-                        return e.getMessage();
-                    }
-                } else if (subbedLine.contains(":")) {
-                    return subbedLine.split(":")[0] + " is not a supported protocol.";
-                } else {
-                    extraPaths.add(Path.of(subbedLine));
-                }
-            }
-
-            return null;
-        };
-
-        for (var dependencyFile : this.dependencyFile) {
-            for (var line : Files.readAllLines(dependencyFile.toPath())) {
-                var msg = processLine.apply(line);
-                if (msg != null) {
-                    err.println("Invalid dependency declaration: " + line);
-                    err.println(msg);
-                    err.flush();
-                    return -1;
-                }
-            }
-        }
-
-        for (var line : dependencies) {
-            var msg = processLine.apply(line);
-            if (msg != null) {
-                err.println("Invalid dependency declaration: " + line);
-                err.println(msg);
-                err.flush();
-                return -1;
-            }
-        }
+        var dependencies = new ArrayList<Dependency>();
 
 
         var knownRepositories = new HashMap<String, MavenRepository>();
@@ -259,62 +321,45 @@ public final class CliMain implements Callable<Integer> {
             );
         }
 
-        var dependencies = new ArrayList<Dependency>();
-
-        for (var packageUrl : packageUrls) {
-            var group = new Group(String.join(".", Objects.requireNonNull(packageUrl.getNamespace(), "Package url must have a namespace")));
-            var artifact = new Artifact(packageUrl.getName());
-            var version = new Version(Objects.requireNonNull(packageUrl.getVersion(), "Package url must have a version"));
-
-            var repositoryNames = List.of("central");
-            String classifierStr = null;
-
-            var qualifiers = packageUrl.getQualifiers();
-            if (qualifiers != null) {
-                var repoQualifier = qualifiers.get("repository");
-                if (repoQualifier != null) {
-                    repositoryNames = Arrays.asList(repoQualifier.split(","));
-                }
-
-                var classifierQualifier = qualifiers.get("classifier");
-                if (classifierQualifier != null && !classifierQualifier.equals("default")) {
-                    classifierStr = classifierQualifier;
+        String finalOsArch = osArch;
+        Function<String, String> processLine = line -> {
+            var subbedLine = line
+                    .replace("{{os.name}}", osName)
+                    .replace("{{os.arch}}", finalOsArch)
+                    .replace("{{user.dir}}", System.getProperty("user.dir"))
+                    .trim();
+            if (!line.isBlank()) {
+                try {
+                    var dependency = Dependency.fromCoordinate(subbedLine, knownRepositories);
+                    dependencies.add(dependency);
+                } catch (Exception e) {
+                    return e.getMessage();
                 }
             }
 
-            var repositories = new ArrayList<MavenRepository>();
-            for (var repositoryName : repositoryNames) {
-                var repo = knownRepositories.get(repositoryName);
-                if (repo == null) {
-                    err.println("Unknown repository: " + repositoryName);
+            return null;
+        };
+
+        for (var dependencyFile : this.dependencyFile) {
+            for (var line : Files.readAllLines(dependencyFile.toPath())) {
+                var msg = processLine.apply(line);
+                if (msg != null) {
+                    err.println("Invalid dependency declaration: " + line);
+                    err.println(msg);
                     err.flush();
                     return -1;
                 }
-                repositories.add(repo);
             }
+        }
 
-
-            var library = new Library(
-                    group,
-                    artifact,
-                    classifierStr == null ? Variant.DEFAULT : new Variant(classifierStr)
-            );
-
-            var classifier = classifierStr == null ? Classifier.EMPTY : new Classifier(classifierStr);
-
-            var coordinate = new MavenCoordinate(
-                    group,
-                    artifact,
-                    version,
-                    List.copyOf(repositories),
-                    List.of(Scope.COMPILE, Scope.RUNTIME),
-                    classifier,
-                    Classifier.SOURCES,
-                    Classifier.JAVADOC
-            );
-
-            var dependency = new Dependency(library, coordinate);
-            dependencies.add(dependency);
+        for (var line : this.dependencies) {
+            var msg = processLine.apply(line);
+            if (msg != null) {
+                err.println("Invalid dependency declaration: " + line);
+                err.println(msg);
+                err.flush();
+                return -1;
+            }
         }
 
 
@@ -415,57 +460,6 @@ public final class CliMain implements Callable<Integer> {
             }
         }
 
-/*
-        if (resolutionFile != null && !select) {
-            var deps = Json.arrayBuilder();
-            resolution.selectedDependencies()
-                    .forEach(dep -> {
-                        deps.add(DependencySerde.toJson(dep));
-                    });
-
-            var resolutionPath = resolutionFile.toPath();
-            if (resolutionPath.getParent() != null) {
-                Files.createDirectories(resolutionFile.toPath().getParent());
-            }
-
-            Files.writeString(
-                    resolutionFile.toPath(),
-                    Json.writeString(deps),
-                    StandardOpenOption.CREATE, StandardOpenOption.WRITE
-            );
-        } */
-
-        /*
-        if (outputFormat == OutputFormat.manifest) {
-            resolution.selectedDependencies()
-                    .stream()
-                    .sorted(Comparator.comparing((Dependency dep) -> dep.library().group())
-                            .thenComparing(dep -> dep.library().artifact()))
-                    .forEach(dependency -> {
-                        if (dependency.coordinate() instanceof MavenCoordinate mavenCoordinate) {
-                            out.println("pkg:maven/"
-                                        + mavenCoordinate.group()
-                                        + "/"
-                                        +  mavenCoordinate.artifact()
-                                        + "@"
-                                        + mavenCoordinate.version()
-                                        + (
-                                                mavenCoordinate.classifier() == Classifier.EMPTY
-                                                        ? ""
-                                                        : "?classifier="
-                                                          + URLEncoder.encode(
-                                                                mavenCoordinate.classifier().value(),
-                                                                StandardCharsets.UTF_8
-                                                )
-                                        )
-                            );
-                        }
-                    });
-            out.flush();
-            return 0;
-        }
-         */
-
         var deps = resolution.fetch().withCache(cache).run();
 
         if (outputFile != null) {
@@ -474,42 +468,9 @@ public final class CliMain implements Callable<Integer> {
             }
         }
 
-        if (!httpsUrls.isEmpty()) {
-            var httpClient = HttpClient.newBuilder()
-                    .followRedirects(HttpClient.Redirect.NORMAL)
-                    .build();
-            for (var httpsUrl : httpsUrls) {
-                var cacheKey = uriToCacheKey(httpsUrl);
-                try {
-                    extraPaths.add(cache.fetch(cacheKey, () -> {
-                                try {
-                                    var response = httpClient.send(
-                                            HttpRequest.newBuilder(httpsUrl)
-                                                    .build(),
-                                            HttpResponse.BodyHandlers.ofInputStream());
-                                    if (response.statusCode() < 200 || response.statusCode() >= 300) {
-                                        throw new IOException("Bad status code: " + response.statusCode());
-                                    }
-                                    return response.body();
-                                } catch (IOException e) {
-                                    throw new UncheckedIOException(e);
-                                } catch (InterruptedException e) {
-                                    throw new RuntimeException(e);
-                                }
-                            })
-                    );
-                } catch (UncheckedIOException e) {
-                    err.println(e.getMessage());
-                    err.flush();
-                    return -1;
-                }
-            }
-        }
-
-
         if ((outputDirectory == null && enrichPom == null) || outputFile != null) {
             try (var outActual = outputFile == null ? out : new PrintWriter(outputFile)) {
-                outActual.println(deps.path(extraPaths));
+                outActual.println(deps.path());
             }
         }
 
@@ -541,7 +502,7 @@ public final class CliMain implements Callable<Integer> {
 
         }
 
-        if (outputDirectory != null && (!deps.libraries().isEmpty() || !extraPaths.isEmpty())) {
+        if (outputDirectory != null && (!deps.libraries().isEmpty())) {
             Files.createDirectories(outputDirectory.toPath());
 
 
@@ -592,13 +553,6 @@ public final class CliMain implements Callable<Integer> {
 
             for (var path : deps.libraries().values()) {
                 int status = addPath.apply(path);
-                if (status != 0) {
-                    return status;
-                }
-            }
-
-            for (var extraPath : extraPaths) {
-                int status = addPath.apply(extraPath);
                 if (status != 0) {
                     return status;
                 }

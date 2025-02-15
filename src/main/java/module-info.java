@@ -8,6 +8,8 @@ module dev.mccue.resolve.cli {
     requires dev.mccue.purl;
     requires info.picocli;
     requires java.xml;
+    requires org.tomlj;
+    requires dev.mccue.guava.graph;
 
     opens dev.mccue.resolve.cli
             to info.picocli;
