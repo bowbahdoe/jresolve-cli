@@ -7,7 +7,7 @@ make_reflect_config:
     ./mvnw -Ppicocli-codegen dependency:copy-dependencies
     ./mvnw package
     java \
-        --class-path target/dependency/picocli-codegen-4.7.5.jar:target/jresolve-cli-2025.02.14.1.jar:target/dependency/json-2024.11.20.jar:target/dependency/picocli-4.7.5.jar:target/dependency/purl-2023.11.07.jar:target/dependency/resolve-2025.02.14.1.jar \
+        --class-path target/dependency/picocli-codegen-4.7.5.jar:target/jresolve-cli-2025.02.15.jar:target/dependency/json-2024.11.20.jar:target/dependency/picocli-4.7.5.jar:target/dependency/purl-2023.11.07.jar:target/dependency/resolve-2025.02.14.1.jar \
         picocli.codegen.aot.graalvm.ReflectionConfigGenerator \
         dev.mccue.resolve.cli.CliMain > reflect.json
 
@@ -19,7 +19,7 @@ exe static='':
     native-image \
         --class-path $(./join.sh) \
         -H:+UnlockExperimentalVMOptions -H:ReflectionConfigurationFiles=reflect.json -H:+ReportUnsupportedElementsAtRuntime \
-        -jar target/jresolve-cli-2025.02.14.1.jar \
+        -jar target/jresolve-cli-2025.02.15.jar \
         {{static}} jresolve
 
 exe_windows:

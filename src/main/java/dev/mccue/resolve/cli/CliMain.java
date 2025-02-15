@@ -48,7 +48,7 @@ import static dev.mccue.json.JsonDecoder.string;
 @CommandLine.Command(
         name = "jresolve",
         mixinStandardHelpOptions = true,
-        version = "v2025.02.14.1",
+        version = "v2025.02.15",
         description = "Resolves dependencies for the JVM."
 )
 public final class CliMain implements Callable<Integer> {
